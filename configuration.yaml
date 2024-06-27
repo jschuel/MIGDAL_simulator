@@ -1,0 +1,7 @@
+input_file: 'input.card' #Name of input card file. run_and_process_degrad.py adjusts the parameters below in the card file
+
+n_tracks: 125 #Number of ERs to simulate
+
+seed: 42 #Use what you want here
+
+energy: 5900 #In eV
