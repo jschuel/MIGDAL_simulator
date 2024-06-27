@@ -6,7 +6,7 @@ seed: 42 #Use what you want here
 
 energy: 5900 #In eV
 
-rotate_tracks: False #Set to True if you want to rotate the primary tracks so they are isotropic. Otherwise primary tracks are (1,0,0)
+rotate_tracks: True #Set to True if you want to rotate the primary tracks so they are isotropic. Otherwise primary tracks are (1,0,0)
 
 parallel: True #Splits the degrad task into N chunks and concatenates the output. Recommended if n_tracks > 1000
 
