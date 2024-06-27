@@ -7,12 +7,14 @@ import subprocess
 import pandas as pd
 import numpy as np
 import os
+from tqdm import tqdm
 
 class run_degrad:
-    def __init__(self,card_file,num_events,energy,random_seed=0):
+    def __init__(self,card_file,num_events,energy,truth_dir=np.array([1,0,0]),random_seed=0,rotate=False):
         self.card_file = card_file
         self.num_events = num_events
         self.seed = random_seed
+        self.truth_dir = truth_dir
         self.energy = format(energy, '.5f')
         self.outfile_name = '%s_events_%skeV_%s_seed.out'%(self.num_events,float(self.energy)/1000,self.seed)
         '''Modify num_events, random_seed, and energy in CARD file'''
@@ -25,8 +27,20 @@ class run_degrad:
         '''Group tracks into a track-indexed dataframe'''
         self.output = self.convert_numpy_to_pandas()
 
+        '''Isotropize track direction if rotate is set to True'''
+        if rotate:
+            self.output = self.rotate_tracks(self.output)
+        else:
+            self.output['truth_dir'] = [self.truth_dir for i in range(0,len(self.output))]
+
+        self.output['truth_theta'] = self.output['truth_dir'].apply(lambda x: np.arccos(x[2]))
+        self.output['truth_phi'] = self.output['truth_dir'].apply(lambda x: np.arctan2(x[1],x[0]))
+
         '''Save output dataframe'''
-        outname = os.path.splitext(self.outfile_name)[0]+'.feather'
+        if rotate:
+            outname = os.path.splitext(self.outfile_name)[0]+'_isotropic.feather'
+        else:
+            outname = os.path.splitext(self.outfile_name)[0]+'.feather'
         self.output.to_feather(outname)
 
         '''Delete raw DEGRAD output'''
@@ -117,6 +131,64 @@ class run_degrad:
 
     def remove_degrad_output(self):
         os.remove(self.outfile_name)
+
+    '''Isotropizes track angular distributions'''
+    def rotate_track(self,track,init_dir):
+        
+        def random_theta_phi(): #get random theta and phis for rotation
+            ctheta = np.random.uniform(-1,1) #draw from uniform cos(theta) distribution
+            phi = np.random.uniform(0,2*np.pi)
+            theta = np.arccos(ctheta)
+            x = np.sin(theta)*np.cos(phi)
+            y = np.sin(theta)*np.sin(phi)
+            z = np.cos(theta)
+            return theta, np.arctan2(y,x)
+
+        def rotate_y(x,y,z,angle): #rotate about y axis
+            xp = np.cos(angle)*x+np.sin(angle)*z
+            yp = y
+            zp = -np.sin(angle)*x+np.cos(angle)*z
+            return xp,yp,zp
+    
+        def rotate_z(x,y,z,angle): #rotate about z axis
+            xp = np.cos(angle)*x-np.sin(angle)*y
+            yp = np.sin(angle)*x+np.cos(angle)*y
+            zp = z
+            return xp,yp,zp
+
+        theta,phi = random_theta_phi()
+
+        '''Rotate tracks to make them directionally isotropic'''
+        x_r1, y_r1, z_r1 = rotate_y(track['x'], track['y'], track['z'], -(np.pi/2-theta)) #rotate track coordinates about y axis
+        x_r2, y_r2, z_r2 = rotate_z(x_r1, y_r1, z_r1, phi) #rotate track coordinates about z axis
+        
+        '''Do the same for truth directions'''
+        dir_rx1, dir_ry1, dir_rz1 = rotate_y(init_dir[0], init_dir[1], init_dir[2], -(np.pi/2-theta)) #rotate reocil direction about y axis
+        dir_rx2, dir_ry2, dir_rz2 = rotate_z(dir_rx1, dir_ry1, dir_rz1, phi) #rotate reocil direction about z axis
+        
+        dir_r = np.array([dir_rx2, dir_ry2, dir_rz2])
+        
+        return x_r2, y_r2, z_r2, dir_r
+
+    def rotate_tracks(self,df):
+        print("\nRandomly rotating tracks\n")
+        xrot   = []
+        yrot   = []
+        zrot   = []
+        dirrot = []
+        for i in tqdm(range(0,len(df))):
+            track = df.iloc[i]
+            xr, yr, zr, dirr = self.rotate_track(track,init_dir = self.truth_dir) #Rotate track coordinates..also centers tracks
+            xrot.append(xr)
+            yrot.append(yr)
+            zrot.append(zr)
+            dirrot.append(dirr)
+        df['x'] = xrot
+        df['y'] = yrot
+        df['z'] = zrot
+        df['truth_dir'] = dirrot
+
+        return df
     
 if __name__ == '__main__':
     import yaml
@@ -129,9 +201,11 @@ if __name__ == '__main__':
     n_events = config['n_tracks']
     seed = config['seed']
     E = config['energy']
+    rot = config['rotate_tracks']
 
     '''Update card, run degrad, process output, save pandas dataframe as feather file'''
     run_degrad(card_file=card,
                num_events=n_events,
                energy = E,
-               random_seed = seed)
+               random_seed = seed,
+               rotate = rot)
