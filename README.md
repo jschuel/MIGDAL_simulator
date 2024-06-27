@@ -4,7 +4,7 @@ Tools for convenient degrad simulation for MIGDAL. Plan to add in a quick digiti
 # Getting started
 
 1. Clone this repository `git clone git@github.com:jschuel/degrad_tools.git`
-2. In the degrad_tools directory download the latest version of degrad
+2. In the `degrad_tools/` directory download the latest version of degrad
    ```sh
    wget https://degrad.web.cern.ch/degrad/degrad-3.19.f
    ```
