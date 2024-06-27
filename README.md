@@ -1,7 +1,7 @@
 # degrad_tools
 Tools for convenient degrad simulation for MIGDAL. Plan to add in a quick digitizer too.
 
-#Getting started
+# Getting started
 
 1. Clone this repository `git clone git@github.com:jschuel/degrad_tools.git`
 2. In the degrad_tools directory download the latest version of degrad
