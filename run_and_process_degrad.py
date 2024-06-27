@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import os
 from tqdm import tqdm
+import time
 
 class run_degrad:
     def __init__(self,card_file,num_events,energy,truth_dir=np.array([1,0,0]),random_seed=0,rotate=False):
@@ -41,7 +42,9 @@ class run_degrad:
             outname = os.path.splitext(self.outfile_name)[0]+'_isotropic.feather'
         else:
             outname = os.path.splitext(self.outfile_name)[0]+'.feather'
-        self.output.to_feather(outname)
+        if not os.path.exists('data'):
+            os.makedirs('data')
+        self.output.to_feather('data/'+outname)
 
         '''Delete raw DEGRAD output'''
         self.remove_degrad_output()
@@ -62,7 +65,8 @@ class run_degrad:
     def run_degrad_executable(self):
         # Run the Fortran executable
         with open(self.card_file, 'r') as infile:
-            subprocess.run(['./degrad'],stdin=infile)
+            with open(os.devnull,'w') as devnull:
+                subprocess.run(['./degrad'],stdin=infile,stdout=devnull,stderr=devnull)
 
         # Rename the output file
         subprocess.run(['mv', 'DEGRAD.OUT', self.outfile_name])
@@ -171,12 +175,12 @@ class run_degrad:
         return x_r2, y_r2, z_r2, dir_r
 
     def rotate_tracks(self,df):
-        print("\nRandomly rotating tracks\n")
+        #print("\nRandomly rotating tracks\n")
         xrot   = []
         yrot   = []
         zrot   = []
         dirrot = []
-        for i in tqdm(range(0,len(df))):
+        for i in range(0,len(df)):
             track = df.iloc[i]
             xr, yr, zr, dirr = self.rotate_track(track,init_dir = self.truth_dir) #Rotate track coordinates..also centers tracks
             xrot.append(xr)
@@ -202,10 +206,45 @@ if __name__ == '__main__':
     seed = config['seed']
     E = config['energy']
     rot = config['rotate_tracks']
+    parallel = config['parallel']
+    nchunks = config['parallel_chunks']
 
-    '''Update card, run degrad, process output, save pandas dataframe as feather file'''
-    run_degrad(card_file=card,
-               num_events=n_events,
-               energy = E,
-               random_seed = seed,
-               rotate = rot)
+    if not parallel:
+        '''Update card, run degrad, process output, save pandas dataframe as feather file'''
+        run_degrad(card_file=card,
+                   num_events=n_events,
+                   energy = E,
+                   random_seed = seed,
+                   rotate = rot)
+        '''If we run in parallel chunks, we just set random_seed to the chunk number'''
+    else:
+        n_events = n_events//nchunks
+        print('Running DEGRAD %s times'%(nchunks))
+        start = time.time() #log start time
+        for chunk in tqdm(range(0,nchunks)):
+            run_degrad(card_file=card,
+                       num_events=n_events,
+                       energy = E,
+                       random_seed = chunk,
+                       rotate = rot)
+
+        '''Check all files that were created after start'''
+        files = []
+        outpath = 'data/'
+        for filename in os.listdir(outpath):
+            filepath = os.path.join(outpath, filename)
+            if os.path.isfile(filepath):
+                creation_time = os.path.getctime(filepath)
+                if creation_time > start:
+                    files.append(filename)
+
+        print('Concatenating files created this run\n')
+        df = pd.concat([pd.read_feather(outpath+fi) for fi in sorted(files)])
+        df.index = [i for i in range(0,len(df))]
+        df.to_feather(outpath+"%skeV_%sEvents_all.feather"%(float(E)/1000,n_events*nchunks))
+        print('DONE\n')
+        print('Cleaning intermediate files\n')
+        for fi in files:
+            os.remove(outpath+fi)
+
+        print('DONE')

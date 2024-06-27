@@ -1,9 +1,13 @@
 input_file: 'input.card' #Name of input card file. run_and_process_degrad.py adjusts the parameters below in the card file
 
-n_tracks: 10000 #Number of ERs to simulate
+n_tracks: 20000 #Number of ERs to simulate
 
 seed: 42 #Use what you want here
 
 energy: 5900 #In eV
 
-rotate_tracks: True #Set to True if you want to rotate the primary tracks so they are isotropic. Otherwise primary tracks are (1,0,0)
+rotate_tracks: False #Set to True if you want to rotate the primary tracks so they are isotropic. Otherwise primary tracks are (1,0,0)
+
+parallel: True #Splits the degrad task into N chunks and concatenates the output. Recommended if n_tracks > 1000
+
+parallel_chunks: 40 #only relevant if parallel is set to True. Must be <= n_tracks. n_tracks // parallel_chunks = 500 or 1000 performs well
