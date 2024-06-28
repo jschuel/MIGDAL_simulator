@@ -13,7 +13,7 @@ from scipy.spatial import KDTree #Determines if charge passes through GEM holes 
 
 class run_degrad:
     def __init__(self,card_file,num_events,energy,drift,v_drift,sigmaT,sigmaL,sigmaT_trans,sigmaL_trans,
-                 sigmaT_induc,sigmaL_induc,W,GEM_width, GEM_height, hole_diameter, hole_pitch, amplify,gain,
+                 sigmaT_induc,sigmaL_induc,W,GEM_width, GEM_height, GEM_thickness,hole_diameter, hole_pitch, amplify,gain,
                  truth_dir=np.array([1,0,0]),random_seed=0,rotate=False):
         self.card_file = card_file
         self.num_events = num_events
@@ -69,6 +69,9 @@ class run_degrad:
             xgains = []
             ygains = []
             zgains = []
+            xgains2 = []
+            ygains2 = []
+            zgains2 = []
             for i in range(len(self.output)):
                 event = self.output.iloc[i]
                 track = np.array([event['xdiff'],event['ydiff'],event['zdiff']]).T
@@ -80,10 +83,21 @@ class run_degrad:
                 yamps.append(yamp)
                 zamps.append(zamp)
                 '''Apply first amplification'''
-                xgain,ygain,zgain = self.GEM_gain_and_diffusion(xamp,yamp,zamp,gap='transfer')
+                xgain,ygain,zgain = self.GEM_gain_and_diffusion(xamp,yamp,zamp,gap_length = 0.2+GEM_thickness) #transfer gap is 0.2cm GEM_thickness is in cm
                 xgains.append(xgain)
                 ygains.append(ygain)
                 zgains.append(zgain)
+                '''Figure out which charges make it thru second GEM hole'''
+                gaintrack = np.array([xgain,ygain,zgain]).T
+                charges_passing_through_gain = np.array([charge for charge in gaintrack if self.is_within_GEMhole(charge[0], charge[1])])
+                xgainamp = charges_passing_through_gain[:,0]
+                ygainamp = charges_passing_through_gain[:,1]
+                zgainamp = charges_passing_through_gain[:,2]
+                '''Apply second amplification for camera'''
+                xgain2,ygain2,zgain2 = self.GEM_gain_and_diffusion(xgainamp,ygainamp,zgainamp,gap_length = GEM_thickness) #transfer gap is 0.2cm GEM_thickness is in cm
+                xgains2.append(xgain2)
+                ygains2.append(ygain2)
+                zgains2.append(zgain2)
                 
             self.output['xamp'] = xamps
             self.output['yamp'] = yamps
@@ -92,6 +106,10 @@ class run_degrad:
             self.output['xgain'] = xgains
             self.output['ygain'] = ygains
             self.output['zgain'] = zgains
+
+            self.output['xgain2'] = xgains2
+            self.output['ygain2'] = ygains2
+            self.output['zgain2'] = zgains2
 
         '''Save output dataframe'''
         if rotate:
@@ -322,7 +340,7 @@ class run_degrad:
             end_ind = np.sum(gain_electrons[:enum[0]+1])
             x_post[start_ind:end_ind] = x[enum] + np.sqrt(gap_length)*diff_coeff*1E-4*np.random.normal(0,1,val)
 
-    def GEM_gain_and_diffusion(self,x,y,z,gap): #Applies gain and readout resolution smearing
+    def GEM_gain_and_diffusion(self,x,y,z,gap_length): #Applies gain and readout resolution smearing
         gain_electrons = np.random.exponential(np.sqrt(self.gain), len(x))
         gain_electrons = np.asarray(gain_electrons, dtype=int)
         
@@ -330,18 +348,9 @@ class run_degrad:
         y_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
         z_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
 
-        if gap.lower() == 'transfer':
-            self.generate_gain_points(x, x_post, gain_electrons, gap_length = 0.2, diff_coeff = sigmaT_trans)
-            self.generate_gain_points(y, y_post, gain_electrons, gap_length = 0.2, diff_coeff = sigmaT_trans)
-            self.generate_gain_points(z, z_post, gain_electrons, gap_length = 0.2, diff_coeff = sigmaT_trans)
-            
-        elif gap.lower() == 'induction':
-            self.generate_gain_points(x, x_post, gain_electrons, gap_length = 0.2, diff_coeff = sigmaT_induc)
-            self.generate_gain_points(y, y_post, gain_electrons, gap_length = 0.2, diff_coeff = sigmaT_induc)
-            self.generate_gain_points(z, z_post, gain_electrons, gap_length = 0.2, diff_coeff = sigmaT_induc)
-
-        else:
-            raise ValueError("Must specify 'transfer' or 'induction' gap for simulating gain across the GEM")
+        self.generate_gain_points(x, x_post, gain_electrons, gap_length = gap_length, diff_coeff = sigmaT_induc)
+        self.generate_gain_points(y, y_post, gain_electrons, gap_length = gap_length, diff_coeff = sigmaT_induc)
+        self.generate_gain_points(z, z_post, gain_electrons, gap_length = gap_length, diff_coeff = sigmaT_induc)
 
         return x_post, y_post, z_post
     
@@ -370,6 +379,7 @@ if __name__ == '__main__':
     sigmaL_induc = config['sigmaL_induc']
     GEM_width = config['GEM_width']
     GEM_height = config['GEM_height']
+    GEM_thickness = config['GEM_thickness']
     hole_diameter = config['hole_diameter']
     hole_pitch = config['hole_pitch']
     amplify = config['apply_amplification']
@@ -393,6 +403,7 @@ if __name__ == '__main__':
                    sigmaL_induc = sigmaL_induc,
                    GEM_width=GEM_width,
                    GEM_height=GEM_height,
+                   GEM_thickness = GEM_thickness,
                    hole_diameter=hole_diameter,
                    hole_pitch=hole_pitch,
                    amplify=amplify,
@@ -419,6 +430,7 @@ if __name__ == '__main__':
                        sigmaL_induc = sigmaL_induc,
                        GEM_width=GEM_width,
                        GEM_height=GEM_height,
+                       GEM_thickness = GEM_thickness,
                        hole_diameter=hole_diameter,
                        hole_pitch=hole_pitch,
                        amplify=amplify,

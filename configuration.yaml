@@ -26,6 +26,8 @@ GEM_width: 5 #cm
 
 GEM_height: 5 #cm
 
+GEM_thickness: 0.057 #cm
+
 hole_diameter: 170 #GEM hole diameter in um
 
 hole_pitch: 280 #GEM hole pitch in um
