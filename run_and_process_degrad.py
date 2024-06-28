@@ -13,13 +13,14 @@ from scipy.spatial import KDTree #Determines if charge passes through GEM holes 
 
 class run_degrad:
     def __init__(self,card_file,num_events,energy,drift,v_drift,sigmaT,sigmaL,sigmaT_trans,sigmaL_trans,
-                 sigmaT_induc,sigmaL_induc,W,GEM_width, GEM_height, hole_diameter, hole_pitch, amplify,
+                 sigmaT_induc,sigmaL_induc,W,GEM_width, GEM_height, hole_diameter, hole_pitch, amplify,gain,
                  truth_dir=np.array([1,0,0]),random_seed=0,rotate=False):
         self.card_file = card_file
         self.num_events = num_events
         self.seed = random_seed
         self.truth_dir = truth_dir
         self.energy = format(energy, '.5f')
+        self.gain=gain
         self.W = W
         self.v_drift = v_drift
         self.sigmaT = sigmaT
@@ -62,19 +63,36 @@ class run_degrad:
             self.hole_positions = self.create_GEM_holes()
             #Create KD tree
             self.hole_tree = KDTree(self.hole_positions)
-            xamp = []
-            yamp = []
-            zamp = []
+            xamps = []
+            yamps = []
+            zamps = []
+            xgains = []
+            ygains = []
+            zgains = []
             for i in range(len(self.output)):
                 event = self.output.iloc[i]
                 track = np.array([event['xdiff'],event['ydiff'],event['zdiff']]).T
                 charges_passing_through = np.array([charge for charge in track if self.is_within_GEMhole(charge[0], charge[1])])
-                xamp.append(charges_passing_through[:,0])
-                yamp.append(charges_passing_through[:,1])
-                zamp.append(charges_passing_through[:,2])
-            self.output['xamp'] = xamp
-            self.output['yamp'] = yamp
-            self.output['zamp'] = zamp
+                xamp = charges_passing_through[:,0]
+                yamp = charges_passing_through[:,1]
+                zamp = charges_passing_through[:,2]
+                xamps.append(xamp)
+                yamps.append(yamp)
+                zamps.append(zamp)
+                '''Apply first amplification'''
+                xgain,ygain,zgain = self.GEM_gain_and_diffusion(xamp,yamp,zamp,gap='transfer')
+                xgains.append(xgain)
+                ygains.append(ygain)
+                zgains.append(zgain)
+                
+            self.output['xamp'] = xamps
+            self.output['yamp'] = yamps
+            self.output['zamp'] = zamps
+
+            self.output['xgain'] = xgains
+            self.output['ygain'] = ygains
+            self.output['zgain'] = zgains
+
         '''Save output dataframe'''
         if rotate:
             outname = os.path.splitext(self.outfile_name)[0]+'_isotropic.feather'
@@ -297,6 +315,35 @@ class run_degrad:
     def is_within_GEMhole(self,x, y):
         distance, index = self.hole_tree.query([x, y])
         return distance <= self.hole_radius_cm
+
+    def generate_gain_points(self, x, x_post, gain_electrons, gap_length, diff_coeff): #Generates x, y, and z coordiantes after gain
+        for enum, val in np.ndenumerate(gain_electrons):
+            start_ind = np.sum(gain_electrons[:enum[0]])
+            end_ind = np.sum(gain_electrons[:enum[0]+1])
+            x_post[start_ind:end_ind] = x[enum] + np.sqrt(gap_length)*diff_coeff*1E-4*np.random.normal(0,1,val)
+
+    def GEM_gain_and_diffusion(self,x,y,z,gap): #Applies gain and readout resolution smearing
+        gain_electrons = np.random.exponential(np.sqrt(self.gain), len(x))
+        gain_electrons = np.asarray(gain_electrons, dtype=int)
+        
+        x_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
+        y_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
+        z_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
+
+        if gap.lower() == 'transfer':
+            self.generate_gain_points(x, x_post, gain_electrons, gap_length = 0.2, diff_coeff = sigmaT_trans)
+            self.generate_gain_points(y, y_post, gain_electrons, gap_length = 0.2, diff_coeff = sigmaT_trans)
+            self.generate_gain_points(z, z_post, gain_electrons, gap_length = 0.2, diff_coeff = sigmaT_trans)
+            
+        elif gap.lower() == 'induction':
+            self.generate_gain_points(x, x_post, gain_electrons, gap_length = 0.2, diff_coeff = sigmaT_induc)
+            self.generate_gain_points(y, y_post, gain_electrons, gap_length = 0.2, diff_coeff = sigmaT_induc)
+            self.generate_gain_points(z, z_post, gain_electrons, gap_length = 0.2, diff_coeff = sigmaT_induc)
+
+        else:
+            raise ValueError("Must specify 'transfer' or 'induction' gap for simulating gain across the GEM")
+
+        return x_post, y_post, z_post
     
 if __name__ == '__main__':
     import yaml
@@ -326,6 +373,7 @@ if __name__ == '__main__':
     hole_diameter = config['hole_diameter']
     hole_pitch = config['hole_pitch']
     amplify = config['apply_amplification']
+    gain = config['gain']
 
     if not parallel:
         '''Update card, run degrad, process output, save pandas dataframe as feather file'''
@@ -347,7 +395,8 @@ if __name__ == '__main__':
                    GEM_height=GEM_height,
                    hole_diameter=hole_diameter,
                    hole_pitch=hole_pitch,
-                   amplify=amplify)
+                   amplify=amplify,
+                   gain=gain)
         '''If we run in parallel chunks, we just set random_seed to the chunk number'''
     else:
         n_events = n_events//nchunks
@@ -372,7 +421,8 @@ if __name__ == '__main__':
                        GEM_height=GEM_height,
                        hole_diameter=hole_diameter,
                        hole_pitch=hole_pitch,
-                       amplify=amplify)
+                       amplify=amplify,
+                       gain=gain)
 
         '''Check all files that were created after start'''
         files = []

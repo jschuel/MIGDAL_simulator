@@ -6,6 +6,8 @@ seed: 42 #Use what you want here
 
 energy: 4975 #In eV
 
+gain: 90000 #Double GEM gain
+
 vd: 130 #Drift speed in um/ns
 
 sigmaT: 264 #Transverse diffusion in um/sqrt(cm)
