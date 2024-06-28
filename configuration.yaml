@@ -1,13 +1,41 @@
 input_file: 'input.card' #Name of input card file. run_and_process_degrad.py adjusts the parameters below in the card file
 
-n_tracks: 20000 #Number of ERs to simulate
+n_tracks: 200 #Number of ERs to simulate
 
 seed: 42 #Use what you want here
 
-energy: 5900 #In eV
+energy: 4975 #In eV
+
+vd: 130 #Drift speed in um/ns
+
+sigmaT: 264 #Transverse diffusion in um/sqrt(cm)
+
+sigmaL: 167 #Longitudinal diffusion in um/sqrt(cm)
+
+sigmaT_trans: 590 #Diffusion through transfer gap
+
+sigmaL_trans: 218 #Long. diffusion thru transfer gap
+
+sigmaT_induc: 359 #Induction gap trans. diff. Only relevant for ITO digitization
+
+sigmaL_induc: 158
+
+GEM_width: 5 #cm
+
+GEM_height: 5 #cm
+
+hole_diameter: 170 #GEM hole diameter in um
+
+hole_pitch: 280 #GEM hole pitch in um
+
+W: 34.2 #eV value is for CF4
 
 rotate_tracks: True #Set to True if you want to rotate the primary tracks so they are isotropic. Otherwise primary tracks are (1,0,0)
 
 parallel: True #Splits the degrad task into N chunks and concatenates the output. Recommended if n_tracks > 1000
 
 parallel_chunks: 40 #only relevant if parallel is set to True. Must be <= n_tracks. n_tracks // parallel_chunks = 500 or 1000 performs well
+
+apply_drift: True #If True drift tracks
+
+apply_amplification: True #If true, simulate GEMs and amplify

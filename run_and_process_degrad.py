@@ -9,14 +9,25 @@ import numpy as np
 import os
 from tqdm import tqdm
 import time
+from scipy.spatial import KDTree #Determines if charge passes through GEM holes FAST
 
 class run_degrad:
-    def __init__(self,card_file,num_events,energy,truth_dir=np.array([1,0,0]),random_seed=0,rotate=False):
+    def __init__(self,card_file,num_events,energy,drift,v_drift,sigmaT,sigmaL,sigmaT_trans,sigmaL_trans,
+                 sigmaT_induc,sigmaL_induc,W,GEM_width, GEM_height, hole_diameter, hole_pitch, amplify,
+                 truth_dir=np.array([1,0,0]),random_seed=0,rotate=False):
         self.card_file = card_file
         self.num_events = num_events
         self.seed = random_seed
         self.truth_dir = truth_dir
         self.energy = format(energy, '.5f')
+        self.W = W
+        self.v_drift = v_drift
+        self.sigmaT = sigmaT
+        self.sigmaL = sigmaL
+        self.GEM_width = GEM_width
+        self.GEM_height = GEM_height
+        self.hole_diameter = hole_diameter
+        self.hole_pitch = hole_pitch
         self.outfile_name = '%s_events_%skeV_%s_seed.out'%(self.num_events,float(self.energy)/1000,self.seed)
         '''Modify num_events, random_seed, and energy in CARD file'''
         self.modify_file()
@@ -34,9 +45,36 @@ class run_degrad:
         else:
             self.output['truth_dir'] = [self.truth_dir for i in range(0,len(self.output))]
 
+        self.output['truth_energy'] = float(self.energy)
+        self.output['ionization_energy'] = self.output['nHits']*self.W / 1000 #keV
         self.output['truth_theta'] = self.output['truth_dir'].apply(lambda x: np.arccos(x[2]))
         self.output['truth_phi'] = self.output['truth_dir'].apply(lambda x: np.arctan2(x[1],x[0]))
 
+        '''Center tracks (make vertex the origin in z)'''
+        self.output = self.center_tracks(self.output)
+        '''Apply drift if specified'''
+        if drift:
+            self.output['drift_length'] = np.random.uniform(1,3,len(self.output)) #cm
+            self.output = self.apply_diffusion_all_tracks(self.output)
+            
+        '''Amplify if specified'''
+        if amplify:
+            self.hole_positions = self.create_GEM_holes()
+            #Create KD tree
+            self.hole_tree = KDTree(self.hole_positions)
+            xamp = []
+            yamp = []
+            zamp = []
+            for i in range(len(self.output)):
+                event = self.output.iloc[i]
+                track = np.array([event['xdiff'],event['ydiff'],event['zdiff']]).T
+                charges_passing_through = np.array([charge for charge in track if self.is_within_GEMhole(charge[0], charge[1])])
+                xamp.append(charges_passing_through[:,0])
+                yamp.append(charges_passing_through[:,1])
+                zamp.append(charges_passing_through[:,2])
+            self.output['xamp'] = xamp
+            self.output['yamp'] = yamp
+            self.output['zamp'] = zamp
         '''Save output dataframe'''
         if rotate:
             outname = os.path.splitext(self.outfile_name)[0]+'_isotropic.feather'
@@ -118,10 +156,10 @@ class run_degrad:
 
         df = pd.DataFrame()
         df['index'] = self.tracks[:,0]
-        df['x']     = self.tracks[:,1]
-        df['y']     = self.tracks[:,2]
-        df['z']     = self.tracks[:,3]
-        df['t']     = self.tracks[:,4]
+        df['x']     = self.tracks[:,1] / 10000 #cm
+        df['y']     = self.tracks[:,2] / 10000 #cm
+        df['z']     = self.tracks[:,3] / 10000 #cm
+        df['t']     = self.tracks[:,4] #ps
         df['flag']  = self.tracks[:,5]
 
         grp = df.groupby('index').agg(list)
@@ -193,6 +231,72 @@ class run_degrad:
         df['truth_dir'] = dirrot
 
         return df
+
+    def center_tracks(self,df):
+        df['x'] = df['x'].apply(lambda x: x-x.mean())
+        df['y'] = df['y'].apply(lambda x: x-x.mean())
+        df['z'] = df['z'].apply(lambda x: x-x[0])
+        return df
+    
+    def apply_diffusion(self, track): #applies diffusion using input diffusion parameters
+        xs = track['x']
+        ys = track['y']
+        zs = track['z']+track['drift_length']
+        x_diff = np.sqrt(zs)*self.sigmaT*1e-4*np.random.normal(0,1, len(zs))
+        y_diff = np.sqrt(zs)*self.sigmaT*1e-4*np.random.normal(0,1, len(zs))
+        z_diff = np.sqrt(zs)*self.sigmaL*1e-4*np.random.normal(0,1, len(zs))
+        xs = xs+x_diff
+        ys = ys+y_diff
+        zs = zs+z_diff
+        
+        del x_diff, y_diff, z_diff
+        return xs,ys,zs
+
+    def apply_diffusion_all_tracks(self,df):
+        xdiff = []
+        ydiff = []
+        zdiff = []
+        for i in range(0,len(df)):
+            track = df.iloc[i]
+            xd,yd,zd = self.apply_diffusion(track)
+            xdiff.append(xd)
+            ydiff.append(yd)
+            zdiff.append(zd)
+        df['xdiff'] = xdiff
+        df['ydiff'] = ydiff
+        df['zdiff'] = zdiff
+        return df
+
+    '''Creates honeycomb grid of GEM holes with user-input diameter and pitch'''
+    def create_GEM_holes(self):
+        # Convert micrometers to centimeters for plotting
+        hole_diameter_cm = self.hole_diameter / 10000  # cm
+        self.hole_radius_cm = hole_diameter_cm / 2
+        hole_pitch_cm = self.hole_pitch / 10000  # cm
+
+        # Calculate the number of holes in the x and y directions
+        num_holes_x = int(self.GEM_width / hole_pitch_cm)
+        num_holes_y = int(self.GEM_height / (hole_pitch_cm * np.sqrt(3) / 2))
+
+        # Generate the positions of the holes in a honeycomb pattern
+        hole_positions = []
+
+        for i in range(0,num_holes_x):
+            for j in range(0,num_holes_y):
+                x = i * hole_pitch_cm
+                y = j * (hole_pitch_cm * np.sqrt(3) / 2)
+                if j % 2 == 1:
+                    x += hole_pitch_cm / 2  # Offset every other row
+                hole_positions.append((x, y))
+
+        shift = self.GEM_width / 2
+        pos = pd.Series(hole_positions).apply(np.array)-shift
+        hole_positions = pos[pos.apply(lambda x: (x[0]>-1*shift) & (x[1]>-1*shift) & (x[0] < shift) & (x[1] < shift))].apply(tuple).to_list()
+        return hole_positions
+
+    def is_within_GEMhole(self,x, y):
+        distance, index = self.hole_tree.query([x, y])
+        return distance <= self.hole_radius_cm
     
 if __name__ == '__main__':
     import yaml
@@ -208,6 +312,20 @@ if __name__ == '__main__':
     rot = config['rotate_tracks']
     parallel = config['parallel']
     nchunks = config['parallel_chunks']
+    W = config['W']
+    drift = config['apply_drift']
+    v_drift = config['vd']
+    sigmaT = config['sigmaT']
+    sigmaL = config['sigmaL']
+    sigmaT_trans = config['sigmaT_trans']
+    sigmaL_trans = config['sigmaL_trans']
+    sigmaT_induc = config['sigmaT_induc']
+    sigmaL_induc = config['sigmaL_induc']
+    GEM_width = config['GEM_width']
+    GEM_height = config['GEM_height']
+    hole_diameter = config['hole_diameter']
+    hole_pitch = config['hole_pitch']
+    amplify = config['apply_amplification']
 
     if not parallel:
         '''Update card, run degrad, process output, save pandas dataframe as feather file'''
@@ -215,7 +333,21 @@ if __name__ == '__main__':
                    num_events=n_events,
                    energy = E,
                    random_seed = seed,
-                   rotate = rot)
+                   rotate = rot,
+                   W = W,
+                   drift = drift,
+                   v_drift = v_drift,
+                   sigmaT = sigmaT,
+                   sigmaL = sigmaL,
+                   sigmaT_trans = sigmaT_trans,
+                   sigmaL_trans = sigmaL_trans,
+                   sigmaT_induc = sigmaT_induc,
+                   sigmaL_induc = sigmaL_induc,
+                   GEM_width=GEM_width,
+                   GEM_height=GEM_height,
+                   hole_diameter=hole_diameter,
+                   hole_pitch=hole_pitch,
+                   amplify=amplify)
         '''If we run in parallel chunks, we just set random_seed to the chunk number'''
     else:
         n_events = n_events//nchunks
@@ -226,7 +358,21 @@ if __name__ == '__main__':
                        num_events=n_events,
                        energy = E,
                        random_seed = chunk,
-                       rotate = rot)
+                       rotate = rot,
+                       W = W,
+                       drift = drift,
+                       v_drift = v_drift,
+                       sigmaT = sigmaT,
+                       sigmaL = sigmaL,
+                       sigmaT_trans = sigmaT_trans,
+                       sigmaL_trans = sigmaL_trans,
+                       sigmaT_induc = sigmaT_induc,
+                       sigmaL_induc = sigmaL_induc,
+                       GEM_width=GEM_width,
+                       GEM_height=GEM_height,
+                       hole_diameter=hole_diameter,
+                       hole_pitch=hole_pitch,
+                       amplify=amplify)
 
         '''Check all files that were created after start'''
         files = []
