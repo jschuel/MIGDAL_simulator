@@ -1,6 +1,6 @@
 input_file: 'input.card' #Name of input card file. run_and_process_degrad.py adjusts the parameters below in the card file
 
-n_tracks: 200 #Number of ERs to simulate
+n_tracks: 5 #Number of ERs to simulate
 
 seed: 42 #Use what you want here
 
@@ -38,7 +38,7 @@ rotate_tracks: True #Set to True if you want to rotate the primary tracks so the
 
 parallel: True #Splits the degrad task into N chunks and concatenates the output. Recommended if n_tracks > 1000
 
-parallel_chunks: 40 #only relevant if parallel is set to True. Must be <= n_tracks. n_tracks // parallel_chunks = 500 or 1000 performs well
+parallel_chunks: 5 #only relevant if parallel is set to True. Must be <= n_tracks. n_tracks // parallel_chunks = 500 or 1000 performs well
 
 apply_drift: True #If True drift tracks
 

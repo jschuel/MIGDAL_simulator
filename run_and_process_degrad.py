@@ -55,8 +55,21 @@ class run_degrad:
         self.output = self.center_tracks(self.output)
         '''Apply drift if specified'''
         if drift:
-            self.output['drift_length'] = np.random.uniform(1,3,len(self.output)) #cm
-            self.output = self.apply_diffusion_all_tracks(self.output)
+            self.output['drift_length'] = np.random.uniform(1,2.5,len(self.output)) #cm
+            self.output['z'] = self.output['drift_length']+self.output['z']
+            '''Apply diffusion'''
+            xdiff = []
+            ydiff = []
+            zdiff = []
+            for i in range(0,len(self.output)):
+                track = self.output.iloc[i]
+                xd,yd,zd = self.apply_diffusion(track['x'],track['y'],track['z'],diffusion_length=track['z'])
+                xdiff.append(xd)
+                ydiff.append(yd)
+                zdiff.append(zd)
+            self.output['xdiff'] = xdiff
+            self.output['ydiff'] = ydiff
+            self.output['zdiff'] = zdiff
             
         '''Amplify if specified'''
         if amplify:
@@ -274,20 +287,17 @@ class run_degrad:
         df['z'] = df['z'].apply(lambda x: x-x[0])
         return df
     
-    def apply_diffusion(self, track): #applies diffusion using input diffusion parameters
-        xs = track['x']
-        ys = track['y']
-        zs = track['z']+track['drift_length']
-        x_diff = np.sqrt(zs)*self.sigmaT*1e-4*np.random.normal(0,1, len(zs))
-        y_diff = np.sqrt(zs)*self.sigmaT*1e-4*np.random.normal(0,1, len(zs))
-        z_diff = np.sqrt(zs)*self.sigmaL*1e-4*np.random.normal(0,1, len(zs))
+    def apply_diffusion(self, xs, ys, zs ,diffusion_length): #applies diffusion using input diffusion parameters
+        x_diff = np.sqrt(diffusion_length)*self.sigmaT*1e-4*np.random.normal(0,1, len(zs))
+        y_diff = np.sqrt(diffusion_length)*self.sigmaT*1e-4*np.random.normal(0,1, len(zs))
+        z_diff = np.sqrt(diffusion_length)*self.sigmaL*1e-4*np.random.normal(0,1, len(zs))
         xs = xs+x_diff
         ys = ys+y_diff
         zs = zs+z_diff
         
         del x_diff, y_diff, z_diff
         return xs,ys,zs
-
+    '''
     def apply_diffusion_all_tracks(self,df):
         xdiff = []
         ydiff = []
@@ -302,7 +312,7 @@ class run_degrad:
         df['ydiff'] = ydiff
         df['zdiff'] = zdiff
         return df
-
+    '''
     '''Creates honeycomb grid of GEM holes with user-input diameter and pitch'''
     def create_GEM_holes(self):
         # Convert micrometers to centimeters for plotting
