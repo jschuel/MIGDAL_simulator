@@ -12,9 +12,11 @@ import time
 from scipy.spatial import KDTree #Determines if charge passes through GEM holes FAST
 
 class run_degrad:
-    def __init__(self,card_file,num_events,energy,drift,v_drift,sigmaT,sigmaL,sigmaT_trans,sigmaL_trans,
-                 sigmaT_induc,sigmaL_induc,W,GEM_width, GEM_height, GEM_thickness,hole_diameter, hole_pitch, amplify,gain,
-                 truth_dir=np.array([1,0,0]),random_seed=0,rotate=False):
+    def __init__(self,card_file,num_events,energy,drift,v_drift,sigmaT,sigmaL,
+                 sigmaT_trans,sigmaL_trans,sigmaT_induc,sigmaL_induc,W,GEM_width,
+                 GEM_height, GEM_thickness,hole_diameter, hole_pitch, amplify,gain,
+                 transfer_gap_length, induction_gap_length, truth_dir=np.array([1,0,0]),
+                 random_seed=0,rotate=False, write_gain = False):
         self.card_file = card_file
         self.num_events = num_events
         self.seed = random_seed
@@ -82,9 +84,15 @@ class run_degrad:
             xgains = []
             ygains = []
             zgains = []
-            xgains2 = []
+            xgains2 = [] #Position after second GEM gain
             ygains2 = []
             zgains2 = []
+            xcam = [] #digitized camera
+            ycam = []
+            qcam = []
+            xITO = [] #digitized ITO
+            zITO = []
+            qITO = []
             for i in range(len(self.output)):
                 event = self.output.iloc[i]
                 track = np.array([event['xdiff'],event['ydiff'],event['zdiff']]).T
@@ -96,7 +104,7 @@ class run_degrad:
                 yamps.append(yamp)
                 zamps.append(zamp)
                 '''Apply first amplification'''
-                xgain,ygain,zgain = self.GEM_gain_and_diffusion(xamp,yamp,zamp,gap_length = 0.2+GEM_thickness) #transfer gap is 0.2cm GEM_thickness is in cm
+                xgain,ygain,zgain = self.GEM_gain_and_diffusion(xamp,yamp,zamp,gap_length = transfer_gap_length+GEM_thickness, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm GEM_thickness is in cm
                 xgains.append(xgain)
                 ygains.append(ygain)
                 zgains.append(zgain)
@@ -107,10 +115,19 @@ class run_degrad:
                 ygainamp = charges_passing_through_gain[:,1]
                 zgainamp = charges_passing_through_gain[:,2]
                 '''Apply second amplification for camera'''
-                xgain2,ygain2,zgain2 = self.GEM_gain_and_diffusion(xgainamp,ygainamp,zgainamp,gap_length = GEM_thickness) #transfer gap is 0.2cm GEM_thickness is in cm
+                xgain2,ygain2,zgain2 = self.GEM_gain_and_diffusion(xgainamp,ygainamp,zgainamp,gap_length = GEM_thickness, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm; GEM_thickness is in cm
                 xgains2.append(xgain2)
                 ygains2.append(ygain2)
                 zgains2.append(zgain2)
+                '''Digitize camera readout'''
+                xc,yc,qc = self.digitize_camera(xgain2,ygain2)
+                xcam.append(xc)
+                ycam.append(yc)
+                qcam.append(qc)
+            
+            self.output['xdiff'] = xdiff
+            self.output['ydiff'] = ydiff
+            self.output['zdiff'] = zdiff
                 
             self.output['xamp'] = xamps
             self.output['yamp'] = yamps
@@ -124,6 +141,32 @@ class run_degrad:
             self.output['ygain2'] = ygains2
             self.output['zgain2'] = zgains2
 
+            self.output['xcam'] = xcam
+            self.output['ycam'] = ycam
+            self.output['qcam'] = qcam
+            self.output['qcam'] = self.output['qcam'].apply(lambda x: x.astype('int16'))
+
+            '''Apply extra induction gap diffusion for ITO sim'''
+            self.output['xgain2'] = self.output['xgain2'].apply(lambda x: x+np.sqrt(induction_gap_length)*sigmaT_induc*1e-4*np.random.normal(0,1,len(x)))
+            self.output['ygain2'] = self.output['ygain2'].apply(lambda x: x+np.sqrt(induction_gap_length)*sigmaT_induc*1e-4*np.random.normal(0,1,len(x)))
+            self.output['zgain2'] = self.output['zgain2'].apply(lambda x: x+np.sqrt(induction_gap_length)*sigmaL_induc*1e-4*np.random.normal(0,1,len(x)))
+
+            '''Digitize ITO'''
+            for i in range(0,len(self.output)):
+                track = self.output.iloc[i]
+                xi,zi,qi = self.digitize_ITO(track['xgain2'],track['zgain2'])
+                xITO.append(xi)
+                zITO.append(zi)
+                qITO.append(qi)
+
+            self.output['xITO'] = xITO
+            self.output['zITO'] = zITO
+            self.output['qITO'] = qITO
+            
+            if not write_gain:
+                del(self.output['xgain'],self.output['xgain2'],self.output['ygain'],
+                    self.output['ygain2'], self.output['zgain'], self.output['zgain2'])
+                
         '''Save output dataframe'''
         if rotate:
             outname = os.path.splitext(self.outfile_name)[0]+'_isotropic.feather'
@@ -350,7 +393,7 @@ class run_degrad:
             end_ind = np.sum(gain_electrons[:enum[0]+1])
             x_post[start_ind:end_ind] = x[enum] + np.sqrt(gap_length)*diff_coeff*1E-4*np.random.normal(0,1,val)
 
-    def GEM_gain_and_diffusion(self,x,y,z,gap_length): #Applies gain and readout resolution smearing
+    def GEM_gain_and_diffusion(self,x,y,z,gap_length, diff_coeff_trans, diff_coeff_long): #Applies gain and readout resolution smearing
         gain_electrons = np.random.exponential(np.sqrt(self.gain), len(x))
         gain_electrons = np.asarray(gain_electrons, dtype=int)
         
@@ -358,11 +401,25 @@ class run_degrad:
         y_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
         z_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
 
-        self.generate_gain_points(x, x_post, gain_electrons, gap_length = gap_length, diff_coeff = sigmaT_induc)
-        self.generate_gain_points(y, y_post, gain_electrons, gap_length = gap_length, diff_coeff = sigmaT_induc)
-        self.generate_gain_points(z, z_post, gain_electrons, gap_length = gap_length, diff_coeff = sigmaT_induc)
+        self.generate_gain_points(x, x_post, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_trans)
+        self.generate_gain_points(y, y_post, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_trans)
+        self.generate_gain_points(z, z_post, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_long)
 
         return x_post, y_post, z_post
+
+    def digitize_camera(self,x,y):
+        a = np.histogram2d(x,y,bins=(2048,1152),range=((-4,4),(-2.25,2.25)))[0].T
+        sparse_hist = np.where(a > 0)
+        y,x = sparse_hist
+        q = a[sparse_hist]
+        return x,y,q
+
+    def digitize_ITO(self,x,z):
+        a = np.histogram2d(x,z,bins=(120,150),range=((-5,5),(0,3.9)))[0].T
+        sparse_hist = np.where(a > 0)
+        z,x = sparse_hist
+        q = a[sparse_hist]
+        return x,z,q
     
 if __name__ == '__main__':
     import yaml
@@ -370,30 +427,37 @@ if __name__ == '__main__':
     '''Load configuration.yaml'''
     with open('configuration.yaml','r') as cfg:
         config = yaml.safe_load(cfg)
-    
-    card = config['input_file']
-    n_events = config['n_tracks']
-    seed = config['seed']
-    E = config['energy']
-    rot = config['rotate_tracks']
-    parallel = config['parallel']
-    nchunks = config['parallel_chunks']
-    W = config['W']
-    drift = config['apply_drift']
-    v_drift = config['vd']
-    sigmaT = config['sigmaT']
-    sigmaL = config['sigmaL']
-    sigmaT_trans = config['sigmaT_trans']
-    sigmaL_trans = config['sigmaL_trans']
-    sigmaT_induc = config['sigmaT_induc']
-    sigmaL_induc = config['sigmaL_induc']
-    GEM_width = config['GEM_width']
-    GEM_height = config['GEM_height']
-    GEM_thickness = config['GEM_thickness']
-    hole_diameter = config['hole_diameter']
-    hole_pitch = config['hole_pitch']
-    amplify = config['apply_amplification']
-    gain = config['gain']
+        degrad_cfg = config['Degrad_card']
+        settings = config['Sim_settings']
+        gas_cfg = config['Gas_props']
+        tpc_cfg = config['TPC_sim']
+        
+    card = degrad_cfg['input_file']
+    n_events = degrad_cfg['n_tracks']
+    seed = degrad_cfg['seed']
+    E = degrad_cfg['energy']
+    rot = settings['rotate_tracks']
+    parallel = settings['parallel']
+    nchunks = settings['parallel_chunks']
+    W = gas_cfg['W']
+    drift = settings['apply_drift']
+    v_drift = gas_cfg['vd']
+    sigmaT = gas_cfg['sigmaT']
+    sigmaL = gas_cfg['sigmaL']
+    sigmaT_trans = gas_cfg['sigmaT_trans']
+    sigmaL_trans = gas_cfg['sigmaL_trans']
+    sigmaT_induc = gas_cfg['sigmaT_induc']
+    sigmaL_induc = gas_cfg['sigmaL_induc']
+    GEM_width = tpc_cfg['GEM_width']
+    GEM_height = tpc_cfg['GEM_height']
+    GEM_thickness = tpc_cfg['GEM_thickness']
+    hole_diameter = tpc_cfg['hole_diameter']
+    hole_pitch = tpc_cfg['hole_pitch']
+    trans_gap = tpc_cfg['transfer_gap']
+    induc_gap = tpc_cfg['induction_gap']
+    amplify = settings['apply_amplification']
+    gain = tpc_cfg['gain']
+    write_gain = settings['write_gain']
 
     if not parallel:
         '''Update card, run degrad, process output, save pandas dataframe as feather file'''
@@ -416,7 +480,10 @@ if __name__ == '__main__':
                    GEM_thickness = GEM_thickness,
                    hole_diameter=hole_diameter,
                    hole_pitch=hole_pitch,
+                   transfer_gap_length = trans_gap,
+                   induction_gap_length = induc_gap,
                    amplify=amplify,
+                   write_gain=write_gain,
                    gain=gain)
         '''If we run in parallel chunks, we just set random_seed to the chunk number'''
     else:
@@ -443,7 +510,10 @@ if __name__ == '__main__':
                        GEM_thickness = GEM_thickness,
                        hole_diameter=hole_diameter,
                        hole_pitch=hole_pitch,
+                       transfer_gap_length = trans_gap,
+                       induction_gap_length = induc_gap,
                        amplify=amplify,
+                       write_gain=write_gain,
                        gain=gain)
 
         '''Check all files that were created after start'''
