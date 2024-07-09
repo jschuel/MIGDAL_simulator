@@ -109,7 +109,7 @@ class run_degrad:
                 yamps.append(yamp)
                 zamps.append(zamp)
                 '''Apply first amplification'''
-                xgain,ygain,zgain = self.GEM_gain_and_diffusion(xamp,yamp,zamp,gap_length = transfer_gap_length, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm GEM_thickness is in cm
+                xgain,ygain,zgain = self.GEM_gain_and_diffusion(xamp,yamp,zamp,gap_length = transfer_gap_length + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm GEM_thickness is in cm
                 xgains.append(xgain)
                 ygains.append(ygain)
                 zgains.append(zgain)
@@ -120,7 +120,7 @@ class run_degrad:
                 ygainamp = charges_passing_through_gain[:,1]
                 zgainamp = charges_passing_through_gain[:,2]
                 '''Apply second amplification for camera'''
-                xgain2,ygain2,zgain2 = self.GEM_gain_and_diffusion(xgainamp,ygainamp,zgainamp,gap_length = 0, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm; GEM_thickness is in cm
+                xgain2,ygain2,zgain2 = self.GEM_gain_and_diffusion(xgainamp,ygainamp,zgainamp,gap_length = 0 + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm; GEM_thickness is in cm
                 xgains2.append(xgain2)
                 ygains2.append(ygain2)
                 zgains2.append(zgain2)
