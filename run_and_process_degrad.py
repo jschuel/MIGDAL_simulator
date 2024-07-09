@@ -15,8 +15,8 @@ class run_degrad:
     def __init__(self,card_file,num_events,energy,drift,v_drift,sigmaT,sigmaL,
                  sigmaT_trans,sigmaL_trans,sigmaT_induc,sigmaL_induc,W,GEM_width,
                  GEM_height, GEM_thickness,hole_diameter, hole_pitch, amplify,gain,
-                 transfer_gap_length, induction_gap_length, truth_dir=np.array([1,0,0]),
-                 random_seed=0,rotate=False, write_gain = False):
+                 transfer_gap_length, induction_gap_length, GEM2_offsetx, GEM2_offsety,
+                 truth_dir=np.array([1,0,0]), random_seed=0, rotate=False, write_gain = False):
         self.card_file = card_file
         self.num_events = num_events
         self.seed = random_seed
@@ -31,6 +31,8 @@ class run_degrad:
         self.GEM_height = GEM_height
         self.hole_diameter = hole_diameter
         self.hole_pitch = hole_pitch
+        self.GEM2_offsetx = GEM2_offsetx
+        self.GEM2_offsety = GEM2_offsety
         self.outfile_name = '%s_events_%skeV_%s_seed.out'%(self.num_events,float(self.energy)/1000,self.seed)
         '''Modify num_events, random_seed, and energy in CARD file'''
         self.modify_file()
@@ -75,9 +77,12 @@ class run_degrad:
             
         '''Amplify if specified'''
         if amplify:
-            self.hole_positions = self.create_GEM_holes()
-            #Create KD tree
-            self.hole_tree = KDTree(self.hole_positions)
+            #GEM 1 with KDtree
+            self.hole_positions1 = self.create_GEM_holes() #no offset in GEM holes
+            self.hole_tree1 = KDTree(self.hole_positions1)
+            #GEM 2 with KDtree
+            self.hole_positions2 = self.create_GEM_holes(offsetx=self.GEM2_offsetx,offsety=self.GEM2_offsety)
+            self.hole_tree2 = KDTree(self.hole_positions2)
             xamps = []
             yamps = []
             zamps = []
@@ -96,7 +101,7 @@ class run_degrad:
             for i in range(len(self.output)):
                 event = self.output.iloc[i]
                 track = np.array([event['xdiff'],event['ydiff'],event['zdiff']]).T
-                charges_passing_through = np.array([charge for charge in track if self.is_within_GEMhole(charge[0], charge[1])])
+                charges_passing_through = np.array([charge for charge in track if self.is_within_GEMhole(charge[0], charge[1], self.hole_tree1)])
                 xamp = charges_passing_through[:,0]
                 yamp = charges_passing_through[:,1]
                 zamp = charges_passing_through[:,2]
@@ -104,18 +109,18 @@ class run_degrad:
                 yamps.append(yamp)
                 zamps.append(zamp)
                 '''Apply first amplification'''
-                xgain,ygain,zgain = self.GEM_gain_and_diffusion(xamp,yamp,zamp,gap_length = transfer_gap_length+GEM_thickness, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm GEM_thickness is in cm
+                xgain,ygain,zgain = self.GEM_gain_and_diffusion(xamp,yamp,zamp,gap_length = transfer_gap_length, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm GEM_thickness is in cm
                 xgains.append(xgain)
                 ygains.append(ygain)
                 zgains.append(zgain)
                 '''Figure out which charges make it thru second GEM hole'''
                 gaintrack = np.array([xgain,ygain,zgain]).T
-                charges_passing_through_gain = np.array([charge for charge in gaintrack if self.is_within_GEMhole(charge[0], charge[1])])
+                charges_passing_through_gain = np.array([charge for charge in gaintrack if self.is_within_GEMhole(charge[0], charge[1], self.hole_tree2)])
                 xgainamp = charges_passing_through_gain[:,0]
                 ygainamp = charges_passing_through_gain[:,1]
                 zgainamp = charges_passing_through_gain[:,2]
                 '''Apply second amplification for camera'''
-                xgain2,ygain2,zgain2 = self.GEM_gain_and_diffusion(xgainamp,ygainamp,zgainamp,gap_length = GEM_thickness, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm; GEM_thickness is in cm
+                xgain2,ygain2,zgain2 = self.GEM_gain_and_diffusion(xgainamp,ygainamp,zgainamp,gap_length = 0, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm; GEM_thickness is in cm
                 xgains2.append(xgain2)
                 ygains2.append(ygain2)
                 zgains2.append(zgain2)
@@ -357,7 +362,7 @@ class run_degrad:
         return df
     '''
     '''Creates honeycomb grid of GEM holes with user-input diameter and pitch'''
-    def create_GEM_holes(self):
+    def create_GEM_holes(self,offsetx=0,offsety=0): #offsets of second GEM relative to first
         # Convert micrometers to centimeters for plotting
         hole_diameter_cm = self.hole_diameter / 10000  # cm
         self.hole_radius_cm = hole_diameter_cm / 2
@@ -376,6 +381,8 @@ class run_degrad:
                 y = j * (hole_pitch_cm * np.sqrt(3) / 2)
                 if j % 2 == 1:
                     x += hole_pitch_cm / 2  # Offset every other row
+                x += offsetx / 10000 #convert to cm
+                y += offsety / 10000
                 hole_positions.append((x, y))
 
         shift = self.GEM_width / 2
@@ -383,8 +390,8 @@ class run_degrad:
         hole_positions = pos[pos.apply(lambda x: (x[0]>-1*shift) & (x[1]>-1*shift) & (x[0] < shift) & (x[1] < shift))].apply(tuple).to_list()
         return hole_positions
 
-    def is_within_GEMhole(self,x, y):
-        distance, index = self.hole_tree.query([x, y])
+    def is_within_GEMhole(self,x, y, tree):
+        distance, index = tree.query([x, y])
         return distance <= self.hole_radius_cm
 
     def generate_gain_points(self, x, x_post, gain_electrons, gap_length, diff_coeff): #Generates x, y, and z coordiantes after gain
@@ -455,6 +462,8 @@ if __name__ == '__main__':
     hole_pitch = tpc_cfg['hole_pitch']
     trans_gap = tpc_cfg['transfer_gap']
     induc_gap = tpc_cfg['induction_gap']
+    GEM2_offsetx = tpc_cfg['GEM2_offsetx']
+    GEM2_offsety = tpc_cfg['GEM2_offsety']
     amplify = settings['apply_amplification']
     gain = tpc_cfg['gain']
     write_gain = settings['write_gain']
@@ -482,6 +491,8 @@ if __name__ == '__main__':
                    hole_pitch=hole_pitch,
                    transfer_gap_length = trans_gap,
                    induction_gap_length = induc_gap,
+                   GEM2_offsetx = GEM2_offsetx,
+                   GEM2_offsety = GEM2_offsety,
                    amplify=amplify,
                    write_gain=write_gain,
                    gain=gain)
@@ -512,6 +523,8 @@ if __name__ == '__main__':
                        hole_pitch=hole_pitch,
                        transfer_gap_length = trans_gap,
                        induction_gap_length = induc_gap,
+                       GEM2_offsetx = GEM2_offsetx,
+                       GEM2_offsety = GEM2_offsety,
                        amplify=amplify,
                        write_gain=write_gain,
                        gain=gain)
@@ -527,7 +540,7 @@ if __name__ == '__main__':
                     files.append(filename)
 
         print('Concatenating files created this run\n')
-        df = pd.concat([pd.read_feather(outpath+fi) for fi in sorted(files)])
+        df = pd.concat([pd.read_feather(outpath+fi) for fi in sorted(files) if '.feather' in fi])
         df.index = [i for i in range(0,len(df))]
         df.to_feather(outpath+"%skeV_%sEvents_all.feather"%(float(E)/1000,n_events*nchunks))
         print('DONE\n')
