@@ -15,7 +15,7 @@ class process_tracks:
                  sigmaL_induc,W,GEM_width, GEM_height, GEM_thickness,hole_diameter,
                  hole_pitch, amplify,gain, transfer_gap_length, induction_gap_length,
                  GEM2_offsetx, GEM2_offsety, truth_dir = np.array([1,0,0]), write_gain = False,
-                 rotate = False, overwrite = False):
+                 overwrite = False):
         self.gain=gain
         self.W = W
         self.v_drift = v_drift
@@ -32,12 +32,6 @@ class process_tracks:
 
         self.data = pd.read_feather(infile)
         self.data = self.data
-
-        '''Isotropize track direction if rotate is set to True'''
-        if rotate: #Only rotate if we didn't rotate the primary track
-            self.data = self.rotate_tracks(self.data)
-            self.data['truth_theta'] = self.data['truth_dir'].apply(lambda x: np.arccos(x[2]))
-            self.data['truth_phi'] = self.data['truth_dir'].apply(lambda x: np.arctan2(x[1],x[0]))
 
         '''Apply drift if specified
         TODO: make drift length ranges a user input parameter in configuration.yaml'''
@@ -161,74 +155,8 @@ class process_tracks:
         if overwrite:
             self.data.to_feather(infile)
         else:
-            if rotate:
-                outname = os.path.splitext(self.outfile_name)[0]+'_isotropic_digitized.feather'
-            else:
-                outname = os.path.splitext(self.outfile_name)[0]+'_digitized.feather'
-                self.data.to_feather('data/'+outname)
-
-    def rotate_track(self,track,init_dir):
-        
-        def random_theta_phi(): #get random theta and phis for rotation
-            ctheta = np.random.uniform(-1,1) #draw from uniform cos(theta) distribution
-            phi = np.random.uniform(0,2*np.pi)
-            theta = np.arccos(ctheta)
-            x = np.sin(theta)*np.cos(phi)
-            y = np.sin(theta)*np.sin(phi)
-            z = np.cos(theta)
-            return theta, np.arctan2(y,x)
-
-        def rotate_y(x,y,z,angle): #rotate about y axis
-            xp = np.cos(angle)*x+np.sin(angle)*z
-            yp = y
-            zp = -np.sin(angle)*x+np.cos(angle)*z
-            return xp,yp,zp
-    
-        def rotate_z(x,y,z,angle): #rotate about z axis
-            xp = np.cos(angle)*x-np.sin(angle)*y
-            yp = np.sin(angle)*x+np.cos(angle)*y
-            zp = z
-            return xp,yp,zp
-
-        theta,phi = random_theta_phi()
-
-        '''Rotate tracks to make them directionally isotropic'''
-        x_r1, y_r1, z_r1 = rotate_y(track['x'], track['y'], track['z'], -(np.pi/2-theta)) #rotate track coordinates about y axis
-        x_r2, y_r2, z_r2 = rotate_z(x_r1, y_r1, z_r1, phi) #rotate track coordinates about z axis
-        
-        '''Do the same for truth directions'''
-        dir_rx1, dir_ry1, dir_rz1 = rotate_y(init_dir[0], init_dir[1], init_dir[2], -(np.pi/2-theta)) #rotate reocil direction about y axis
-        dir_rx2, dir_ry2, dir_rz2 = rotate_z(dir_rx1, dir_ry1, dir_rz1, phi) #rotate reocil direction about z axis
-        
-        dir_r = np.array([dir_rx2, dir_ry2, dir_rz2])
-        
-        return x_r2, y_r2, z_r2, dir_r
-
-    def rotate_tracks(self,df):
-        #print("\nRandomly rotating tracks\n")
-        xrot   = []
-        yrot   = []
-        zrot   = []
-        dirrot = []
-        for i in range(0,len(df)):
-            track = df.iloc[i]
-            xr, yr, zr, dirr = self.rotate_track(track,init_dir = self.truth_dir) #Rotate track coordinates..also centers tracks
-            xrot.append(xr)
-            yrot.append(yr)
-            zrot.append(zr)
-            dirrot.append(dirr)
-        df['x'] = xrot
-        df['y'] = yrot
-        df['z'] = zrot
-        df['truth_dir'] = dirrot
-
-        return df
-
-    def center_tracks(self,df):
-        df['x'] = df['x'].apply(lambda x: x-x.mean())
-        df['y'] = df['y'].apply(lambda x: x-x.mean())
-        df['z'] = df['z'].apply(lambda x: x-x[0])
-        return df
+            outname = os.path.splitext(self.outfile_name)[0]+'_digitized.feather'
+            self.data.to_feather(os.path.split(infile)[0]+'/'+outname)
     
     def apply_diffusion(self, xs, ys, zs ,diffusion_length): #applies diffusion using input diffusion parameters
         x_diff = np.sqrt(diffusion_length)*self.sigmaT*1e-4*np.random.normal(0,1, len(zs))
@@ -338,7 +266,6 @@ if __name__ == '__main__':
         tpc_cfg = config['TPC_sim']
         
     W = gas_cfg['W']
-    rot = settings['rotate_tracks']
     drift = settings['apply_drift']
     v_drift = gas_cfg['vd']
     sigmaT = gas_cfg['sigmaT']
@@ -363,7 +290,6 @@ if __name__ == '__main__':
 
     process_tracks(infile = infile,
                    W = W,
-                   rotate = rot,
                    drift = drift,
                    v_drift = v_drift,
                    sigmaT = sigmaT,
