@@ -159,7 +159,8 @@ class process_tracks:
                 xcam.append(xc)
                 ycam.append(yc)
                 qcam.append(qc)
-                fraccam.append(fracc)
+                if migdal:
+                    fraccam.append(fracc)
             
             self.data['xdiff'] = xdiff
             self.data['ydiff'] = ydiff
