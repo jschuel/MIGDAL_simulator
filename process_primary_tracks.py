@@ -32,7 +32,7 @@ class process_tracks:
         print(infile)
 
         self.data = pd.read_feather(infile)
-        if 'ID' in self.data.colums: #autocheck if the event is a Migdal
+        if 'ID' in self.data.columns: #autocheck if the event is a Migdal
             migdal = True
         else:
             migdal = False
@@ -41,6 +41,7 @@ class process_tracks:
         TODO: make drift length ranges a user input parameter in configuration.yaml'''
         if drift:
             self.data['drift_length'] = np.random.uniform(1,2.5,len(self.data)) #cm
+            self.data['z'] = self.data['z'].apply(lambda x: x-x.mean())
             self.data['z'] = self.data['drift_length']+self.data['z']
             '''Apply diffusion'''
             xdiff = []
@@ -67,49 +68,98 @@ class process_tracks:
             xamps = []
             yamps = []
             zamps = []
+            IDamps = [] #only relevant for Migdals...this keeps track of ER vs NR
             xgains = []
             ygains = []
             zgains = []
+            IDgains = [] #only relevant for Migdals...this keeps track of ER vs NR
             xgains2 = [] #Position after second GEM gain
             ygains2 = []
             zgains2 = []
+            IDgains2 = [] #only relevant for Migdals...this keeps track of ER vs NR
             xcam = [] #digitized camera
             ycam = []
             qcam = []
+            fraccam = [] #only relevant for Migdals...this gives fractional ER content in pixel
             xITO = [] #digitized ITO
             zITO = []
             qITO = []
+            fracITO = []
             for i in tqdm(range(len(self.data))):
                 event = self.data.iloc[i]
-                track = np.array([event['xdiff'],event['ydiff'],event['zdiff']]).T
+                if migdal:
+                    track = np.array([event['xdiff'],event['ydiff'],event['zdiff'],event['ID']]).T
+                else:
+                    track = np.array([event['xdiff'],event['ydiff'],event['zdiff']]).T
                 charges_passing_through = np.array([charge for charge in track if self.is_within_GEMhole(charge[0], charge[1], self.hole_tree1)])
                 xamp = charges_passing_through[:,0]
                 yamp = charges_passing_through[:,1]
                 zamp = charges_passing_through[:,2]
+                if migdal:
+                    IDamp = charges_passing_through[:,3]
+                    IDamps.append(IDamp)
                 xamps.append(xamp)
                 yamps.append(yamp)
                 zamps.append(zamp)
                 '''Apply first amplification'''
-                xgain,ygain,zgain = self.GEM_gain_and_diffusion(xamp,yamp,zamp,gap_length = transfer_gap_length + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm GEM_thickness is in cm
+                if migdal:
+                    NRidx = np.where(IDamp == 1)[0]
+                    ERidx = np.where(IDamp == 0)[0]
+                    xgNR, ygNR, zgNR = self.GEM_gain_and_diffusion(xamp[NRidx],yamp[NRidx],zamp[NRidx],gap_length = transfer_gap_length + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans)
+                    xgER, ygER, zgER = self.GEM_gain_and_diffusion(xamp[ERidx],yamp[ERidx],zamp[ERidx],gap_length = transfer_gap_length + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans)
+                    IDgainER = [0 for i in range(0,len(xgER))]
+                    IDgainNR = [1 for i in range(0,len(xgNR))]
+                    xgain = np.concatenate((xgNR,xgER))
+                    ygain = np.concatenate((ygNR,ygER))
+                    zgain = np.concatenate((zgNR,zgER))
+                    IDgain = np.concatenate((IDgainNR,IDgainER))
+                else:
+                    xgain,ygain,zgain = self.GEM_gain_and_diffusion(xamp,yamp,zamp,gap_length = transfer_gap_length + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm GEM_thickness is in cm
                 xgains.append(xgain)
                 ygains.append(ygain)
                 zgains.append(zgain)
+                if migdal:
+                    IDgains.append(IDgain)
+                    
                 '''Figure out which charges make it thru second GEM hole'''
-                gaintrack = np.array([xgain,ygain,zgain]).T
+                if migdal:
+                    gaintrack = np.array([xgain,ygain,zgain,IDgain]).T
+                else:
+                    gaintrack = np.array([xgain,ygain,zgain]).T
                 charges_passing_through_gain = np.array([charge for charge in gaintrack if self.is_within_GEMhole(charge[0], charge[1], self.hole_tree2)])
                 xgainamp = charges_passing_through_gain[:,0]
                 ygainamp = charges_passing_through_gain[:,1]
                 zgainamp = charges_passing_through_gain[:,2]
+                if migdal:
+                    IDgainamp = charges_passing_through_gain[:,3]
                 '''Apply second amplification for camera'''
-                xgain2,ygain2,zgain2 = self.GEM_gain_and_diffusion(xgainamp,ygainamp,zgainamp,gap_length = 0 + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm; GEM_thickness is in cm
+                if migdal:
+                    NRgainidx = np.where(IDgainamp == 1)[0]
+                    ERgainidx = np.where(IDgainamp == 0)[0]
+                    xgNR2, ygNR2, zgNR2 = self.GEM_gain_and_diffusion(xgainamp[NRgainidx],ygainamp[NRgainidx],zgainamp[NRgainidx],gap_length = transfer_gap_length + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans)
+                    xgER2, ygER2, zgER2 = self.GEM_gain_and_diffusion(xgainamp[ERgainidx],ygainamp[ERgainidx],zgainamp[ERgainidx],gap_length = transfer_gap_length + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans)
+                    IDgainER2 = [0 for i in range(0,len(xgER2))]
+                    IDgainNR2 = [1 for i in range(0,len(xgNR2))]
+                    xgain2 = np.concatenate((xgNR2,xgER2))
+                    ygain2 = np.concatenate((ygNR2,ygER2))
+                    zgain2 = np.concatenate((zgNR2,zgER2))
+                    IDgain2 = np.concatenate((IDgainNR2,IDgainER2))
+                else:
+                    xgain2,ygain2,zgain2 = self.GEM_gain_and_diffusion(xgainamp,ygainamp,zgainamp,gap_length = 0 + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm; GEM_thickness is in cm
                 xgains2.append(xgain2)
                 ygains2.append(ygain2)
                 zgains2.append(zgain2)
+                if migdal:
+                    IDgains2.append(IDgain2)
                 '''Digitize camera readout'''
-                xc,yc,qc = self.digitize_camera(xgain2,ygain2)
+                if migdal:
+                    xc,yc,qc,fracc = self.digitize_camera_migdal(xgain2,ygain2,IDgain2)
+                else:
+                    xc,yc,qc = self.digitize_camera(xgain2,ygain2)
                 xcam.append(xc)
                 ycam.append(yc)
                 qcam.append(qc)
+                fraccam.append(fracc)
             
             self.data['xdiff'] = xdiff
             self.data['ydiff'] = ydiff
@@ -118,19 +168,27 @@ class process_tracks:
             self.data['xamp'] = xamps
             self.data['yamp'] = yamps
             self.data['zamp'] = zamps
+            if migdal:
+                self.data['IDamp'] = IDamps
 
             self.data['xgain'] = xgains
             self.data['ygain'] = ygains
             self.data['zgain'] = zgains
+            if migdal:
+                self.data['IDgain'] = IDgains
 
             self.data['xgain2'] = xgains2
             self.data['ygain2'] = ygains2
             self.data['zgain2'] = zgains2
+            if migdal:
+                self.data['IDgain2'] = IDgains2
 
             self.data['xcam'] = xcam
             self.data['ycam'] = ycam
             self.data['qcam'] = qcam
             self.data['qcam'] = self.data['qcam'].apply(lambda x: x.astype('int16'))
+            if migdal:
+                self.data['ER_frac_cam'] = fraccam
 
             '''Apply extra induction gap diffusion for ITO sim'''
             self.data['xgain2'] = self.data['xgain2'].apply(lambda x: x+np.sqrt(induction_gap_length)*sigmaT_induc*1e-4*np.random.normal(0,1,len(x)))
@@ -140,7 +198,11 @@ class process_tracks:
             '''Digitize ITO'''
             for i in range(0,len(self.data)):
                 track = self.data.iloc[i]
-                xi,zi,qi = self.digitize_ITO(track['xgain2'],track['zgain2'])
+                if migdal:
+                    xi,zi,qi,fraci = self.digitize_ITO_migdal(track['xgain2'],track['zgain2'],track['IDgain2'])
+                    fracITO.append(fraci)
+                else:
+                    xi,zi,qi = self.digitize_ITO(track['xgain2'],track['zgain2'])
                 xITO.append(xi)
                 zITO.append(zi)
                 qITO.append(qi)
@@ -148,6 +210,8 @@ class process_tracks:
             self.data['xITO'] = xITO
             self.data['zITO'] = zITO
             self.data['qITO'] = qITO
+            if migdal:
+                self.data['ER_frac_ITO'] = fracITO
             
             if not write_gain:
                 del(self.data['xgain'],self.data['xgain2'],self.data['ygain'],
@@ -241,12 +305,38 @@ class process_tracks:
 
         return x_post, y_post, z_post
 
+    def digitize_camera_migdal(self,x,y,ID):
+        NRidx = np.where(ID == 1)[0]
+        ERidx = np.where(ID == 0)[0]
+        NRhist = np.histogram2d(x[NRidx],y[NRidx],bins=(2048,1152),range=((-4,4),(-2.25,2.25)))[0].T
+        ERhist = np.histogram2d(x[ERidx],y[ERidx],bins=(2048,1152),range=((-4,4),(-2.25,2.25)))[0].T
+        totalhist = NRhist + ERhist
+        fraction = np.divide(ERhist, totalhist, out=np.zeros_like(ERhist, dtype=float), where=totalhist != 0)
+        sparse_hist = np.where(totalhist > 0)
+        y,x = sparse_hist
+        q = totalhist[sparse_hist]
+        frac = fraction[sparse_hist]
+        return x,y,q,frac
+    
     def digitize_camera(self,x,y):
         a = np.histogram2d(x,y,bins=(2048,1152),range=((-4,4),(-2.25,2.25)))[0].T
         sparse_hist = np.where(a > 0)
         y,x = sparse_hist
         q = a[sparse_hist]
         return x,y,q
+
+    def digitize_ITO_migdal(self,x,z,ID):
+        NRidx = np.where(ID == 1)[0]
+        ERidx = np.where(ID == 0)[0]
+        NRhist = np.histogram2d(x[NRidx],z[NRidx],bins=(120,150),range=((-5,5),(0,3.9)))[0].T
+        ERhist = np.histogram2d(x[ERidx],z[ERidx],bins=(120,150),range=((-5,5),(0,3.9)))[0].T
+        totalhist = NRhist + ERhist
+        fraction = np.divide(ERhist, totalhist, out=np.zeros_like(ERhist, dtype=float), where=totalhist != 0)
+        sparse_hist = np.where(totalhist > 0)
+        z,x = sparse_hist
+        q = totalhist[sparse_hist]
+        frac = fraction[sparse_hist]
+        return x,z,q,frac
 
     def digitize_ITO(self,x,z):
         a = np.histogram2d(x,z,bins=(120,150),range=((-5,5),(0,3.9)))[0].T
