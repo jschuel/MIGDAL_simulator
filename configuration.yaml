@@ -27,6 +27,7 @@ TPC_sim:
   GEM2_offsety: 0 #y coordinate offset of second GEM hole pattern to first in um
   
 Sim_settings:
+  randomize_primary_track_order: True #Randomizes order of tracks when generating primary tracks, generally a good idea to set this to True
   rotate_tracks: True #Set to True if you want to rotate the primary tracks so they are isotropic. Otherwise primary tracks are (1,0,0)
   parallel: True #Splits the degrad task into N chunks and concatenates the output. ONLY APPLIES TO DEGRAD PRIMARY TRACK SIM
   parallel_chunks: 1000 #only relevant if parallel is set to True. Must be <= n_tracks. n_tracks // parallel_chunks = 500 or 1000 performs well
@@ -35,3 +36,9 @@ Sim_settings:
   digitize: True #If true, simulate readout
   write_gain: False #If True, write out amplified charges (TAKES LOTS OF DISK SPACE)
   overwrite_output: True #If True, when processing a primary tracks file, it writes out the processed information to the same file. Otherwise it will write a separate file
+
+Migdal_sim: #Settings for combining ER and NR tracks for forming Migdals
+  ER_input_filepath: data/4.975keV_20000Events_all.feather
+  NR_input_filepath: RCTRIM/output/C_maxE699.997_19561primaryTracks.feather
+  output_directory: migdal_primary_tracks/
+  randomize: False

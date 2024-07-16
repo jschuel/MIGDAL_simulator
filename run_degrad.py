@@ -12,7 +12,7 @@ import time
 from scipy.spatial import KDTree #Determines if charge passes through GEM holes FAST
 
 class run_degrad:
-    def __init__(self,card_file,num_events,energy,W,truth_dir=np.array([1,0,0]), random_seed=0, rotate = False):
+    def __init__(self,card_file,num_events,energy,W,randomize_track_order = True,truth_dir=np.array([1,0,0]), random_seed=0, rotate = False):
         self.card_file = card_file
         self.num_events = num_events
         self.seed = random_seed
@@ -43,7 +43,11 @@ class run_degrad:
 
         '''Center tracks (make vertex the origin in z)'''
         self.output = self.center_tracks(self.output)
-                        
+
+        if randomize_primary_track_order:
+            self.output = self.output.sample(frac = 1)
+            self.output.index = [i for i in range(0,len(self.output))]
+            
         '''Save output dataframe'''
         if rotate:
             outname = os.path.splitext(self.outfile_name)[0]+'_isotropic.feather'
@@ -226,6 +230,7 @@ if __name__ == '__main__':
     parallel = settings['parallel']
     nchunks = settings['parallel_chunks']
     W = gas_cfg['W']
+    random_order = settings['randomize_primary_track_order']
     
     if not parallel:
         '''Update card, run degrad, process output, save pandas dataframe as feather file'''
@@ -234,6 +239,7 @@ if __name__ == '__main__':
                    energy = E,
                    random_seed = seed,
                    rotate = rot,
+                   randomize_primary_track_order = random_order,
                    W = W)
         '''If we run in parallel chunks, we just set random_seed to the chunk number'''
     else:
@@ -246,6 +252,7 @@ if __name__ == '__main__':
                        energy = E,
                        random_seed = chunk,
                        rotate = rot,
+                       randomize_primary_track_order = random_order,
                        W = W)
 
         '''Check all files that were created after start'''
