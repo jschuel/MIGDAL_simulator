@@ -16,6 +16,7 @@ class process_tracks:
                  hole_pitch, amplify,gain, transfer_gap_length, induction_gap_length,
                  GEM2_offsetx, GEM2_offsety, truth_dir = np.array([1,0,0]), write_gain = False,
                  overwrite = False):
+
         self.gain=gain
         self.W = W
         self.v_drift = v_drift
@@ -31,7 +32,10 @@ class process_tracks:
         print(infile)
 
         self.data = pd.read_feather(infile)
-        self.data = self.data
+        if 'ID' in self.data.colums: #autocheck if the event is a Migdal
+            migdal = True
+        else:
+            migdal = False
 
         '''Apply drift if specified
         TODO: make drift length ranges a user input parameter in configuration.yaml'''
