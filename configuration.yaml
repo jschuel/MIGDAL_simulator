@@ -1,40 +1,44 @@
 Degrad_card:
-  energy: 11800
-  input_file: input.card
-  n_tracks: 400
-  seed: 42
+  input_file: input.card   #Name of input card file. run_and_process_degrad.py adjusts the parameters below in the card file
+  n_tracks: 100   #Number of ERs to simulate
+  seed: 42 #Use what you want here
+  energy: 4000 #In eV
+
 Gas_props:
-  W: 34.2
-  sigmaL: 167
+  vd: 130 #Drift speed in um/ns
+  sigmaT: 264 #Transverse diffusion in um/sqrt(cm)
+  sigmaL: 167 #Longitudinal diffusion in um/sqrt(cm)
+  sigmaT_trans: 590 #Diffusion through transfer gap
+  sigmaL_trans: 218 #Long. diffusion thru transfer gap
+  sigmaT_induc: 359 #Induction gap trans. diff. Only relevant for ITO digitization
   sigmaL_induc: 158
-  sigmaL_trans: 218
-  sigmaT: 264
-  sigmaT_induc: 359
-  sigmaT_trans: 590
-  vd: 130
-Migdal_sim:
-  ER_input_filepath: data/20000ERs_2-11.8keV.feather
-  NR_input_filepath: RCTRIM/output/F_maxE466.957_18359primaryTracks.feather
+  W: 34.2 #eV value is for CF4
+
+TPC_sim:
+  gain: 90000 #Double GEM gain
+  GEM_width: 5 #cm
+  GEM_height: 5 #cm
+  GEM_thickness: 0.057 #cm
+  hole_diameter: 170 #GEM hole diameter in um
+  hole_pitch: 280 #GEM hole pitch in um
+  transfer_gap: 0.2 #length of transfer gap cm
+  induction_gap: 0.2 #length of induction gap cm
+  GEM2_offsetx: 0 #x coordinate offset of second GEM hole pattern to first in um
+  GEM2_offsety: 0 #y coordinate offset of second GEM hole pattern to first in um
+
+Sim_settings:
+  randomize_primary_track_order: true #Randomizes order of tracks when generating primary tracks, generally a good idea to set this to True
+  rotate_tracks: true #Set to True if you want to rotate the primary tracks so they are isotropic. Otherwise primary tracks are (1,0,0)
+  parallel: true #Splits the degrad task into N chunks and concatenates the output. ONLY APPLIES TO DEGRAD PRIMARY TRACK SIM
+  parallel_chunks: 1    #only relevant if parallel is set to True. Must be <= n_tracks. n_tracks // parallel_chunks = 500 or 1000 performs well
+  apply_drift: true #If True drift tracks
+  apply_amplification: true #If true, simulate GEMs and amplify
+  digitize: true #If true, simulate readout
+  write_gain: false #If True, write out amplified charges (TAKES LOTS OF DISK SPACE)
+  overwrite_output: true #If True, when processing a primary tracks file, it writes out the processed information to the same file. Otherwise it will write a separate file
+
+Migdal_sim: #Settings for combining ER and NR tracks for forming Migdals
+  ER_input_filepath: data/4.975keV_20000Events_all.feather
+  NR_input_filepath: RCTRIM/output/C_maxE699.997_19561primaryTracks.feather
   output_directory: migdal_primary_tracks/
   randomize: false
-Sim_settings:
-  apply_amplification: true
-  apply_drift: true
-  digitize: true
-  overwrite_output: true
-  parallel: true
-  parallel_chunks: 40
-  randomize_primary_track_order: true
-  rotate_tracks: true
-  write_gain: false
-TPC_sim:
-  GEM2_offsetx: 0
-  GEM2_offsety: 0
-  GEM_height: 5
-  GEM_thickness: 0.057
-  GEM_width: 5
-  gain: 90000
-  hole_diameter: 170
-  hole_pitch: 280
-  induction_gap: 0.2
-  transfer_gap: 0.2
