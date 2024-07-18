@@ -44,7 +44,7 @@ class run_degrad:
         '''Center tracks (make vertex the origin in z)'''
         self.output = self.center_tracks(self.output)
 
-        if randomize_primary_track_order:
+        if randomize_track_order:
             self.output = self.output.sample(frac = 1)
             self.output.index = [i for i in range(0,len(self.output))]
             
@@ -239,7 +239,7 @@ if __name__ == '__main__':
                    energy = E,
                    random_seed = seed,
                    rotate = rot,
-                   randomize_primary_track_order = random_order,
+                   randomize_track_order = random_order,
                    W = W)
         '''If we run in parallel chunks, we just set random_seed to the chunk number'''
     else:
@@ -252,7 +252,7 @@ if __name__ == '__main__':
                        energy = E,
                        random_seed = chunk,
                        rotate = rot,
-                       randomize_primary_track_order = random_order,
+                       randomize_track_order = random_order,
                        W = W)
 
         '''Check all files that were created after start'''
