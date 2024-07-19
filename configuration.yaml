@@ -37,6 +37,15 @@ Sim_settings:
   write_gain: false #If True, write out amplified charges (TAKES LOTS OF DISK SPACE)
   overwrite_output: true #If True, when processing a primary tracks file, it writes out the processed information to the same file. Otherwise it will write a separate file
 
+RCTRIM_settings: #RCTRIM requires a basedir that contains the subdirs 'C' and 'F' and nothing else
+  SRIM_output_dir: /home/jeff/srim/SRIM Outputs/ #YOURS WILL BE DIFFERENT: This is the directory where your raw SRIM output is written to
+  recoil_species_generated: F #needs to be C or F. MAKE SURE TO SPECIFY THIS FOR EACH CAMPAIGN!
+  base_dir: NRs_campaign1/ #Make sure you use a new base_dir if you don't want to overwrite SRIM output files
+  C_recoil_dir: NRs_campaign1/C #Always needs to be <base_dir_name>/C
+  F_recoil_dir: NRs_campaign1/F #Same as above
+  N_recoils: 2000 #Number of primary tracks to generate. THIS CAN BE LARGER THAN THE NUMBER OF EVENTS YOU SIMULATED IN SRIM/TRIM
+  output_dir: data/ #outputh directory for generated primary tracks
+
 Migdal_sim: #Settings for combining ER and NR tracks for forming Migdals
   ER_input_filepath: data/4.975keV_20000Events_all.feather
   NR_input_filepath: RCTRIM/output/C_maxE699.997_19561primaryTracks.feather
