@@ -5,7 +5,7 @@ Welcome to MIGDAL_simulator's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   Introduction
+   Getting Started
 
 MIGDAL_simulator v1.0
 ===============
