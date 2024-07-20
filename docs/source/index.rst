@@ -6,6 +6,8 @@ Welcome to MIGDAL_simulator's documentation!
    :caption: Contents:
 
    Getting Started
+   Simulating Primary Tracks
+   MIGDAL Detector Simulation
 
 MIGDAL_simulator v1.0
 ===============
