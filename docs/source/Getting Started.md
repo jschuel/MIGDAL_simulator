@@ -1,6 +1,6 @@
 # Getting Started
 
-MIGDAL_simulator is a python-based simulation framework. Here we will detail the setup of each component. If you run into any issues with the steps below please contact Jeff Schueler (schuel93@gmail.com) and describe your issue. **Note:** If you are using Windows we recommend using MIGDAL_simulator with [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install).
+MIGDAL_simulator is a python-based simulation framework. Here we will detail the setup of each component. If you run into any issues with the steps below please contact Jeff Schueler (schuel93@gmail.com) and describe your issue. **Note:** If you are using Windows, we recommend using MIGDAL_simulator with [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install).
 
 ## (I) Install the required python packages
 
@@ -32,7 +32,7 @@ git clone https://github.com/jschuel/MIGDAL_simulator.git
 
 ## (III) Installing Degrad
 
-Degrad is a FORTRAN program that simulates the transport of electrons in gas mixtures. Installing and compiling Degrad is required in order to generate primary electronic recoils. **Note:** We have texted this only on Ubunutu 22.04.
+Degrad is a FORTRAN program that simulates the transport of electrons in gas mixtures. Installing and compiling Degrad is required in order to generate primary electronic recoils. **Note:** We have tested this only on Ubunutu 22.04.
 
 1. Navigate to the `MIGDAL_simulator/` directory and download the Degrad fortran file
 
@@ -83,5 +83,8 @@ If a window like below pops up, you've successfully installed SRIM. If not, I wo
 
 ![SRIM](figures/SRIM_popup.png)
 
+### SRIM installation (Windows)
+SRIM is a native Windows application so please consult the [Official SRIM website](http://srim.org/) for installation instructions.
+
 ### Installing RCTRIM
-1. Once you have access, navigate to `MIGDAL_simulator` and clone the repository in this directory.
+Once you have access, navigate to `MIGDAL_simulator` and clone the repository in this directory.
