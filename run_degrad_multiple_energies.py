@@ -31,8 +31,8 @@ if __name__ == "__main__":
     processing_script_path = 'run_degrad.py'
 
     # Modify these values as needed
-    n_tracks = 400
-    energies = [200 * i for i in range(10, 60)]  # 2000-12000 eV
+    n_tracks = 400 #number of tracks per energy step
+    energies = [200 * i for i in range(10, 61)]  #These are in eV so this range is 1-12 keV
     parallel_chunks = 1
 
     for e in energies:

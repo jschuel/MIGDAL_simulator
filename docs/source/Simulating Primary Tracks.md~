@@ -1,7 +1,0 @@
-#Simulating Primary trcaks
-This is a guide detailing how to simulate primary tracks with MIGDAL_simulator. At the highest level, the workflow of this package can be broken down into two steps:
-
-1. Simulate primary tracks
-2. Process these tracks with `process_primary_tracks.py`
-
-This guide details step (1)

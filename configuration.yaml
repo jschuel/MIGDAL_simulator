@@ -1,8 +1,9 @@
 Degrad_card:
   input_file: input.card   #Name of input card file. run_and_process_degrad.py adjusts the parameters below in the card file
-  n_tracks: 100   #Number of ERs to simulate
+  n_tracks: 4     #Number of ERs to simulate
   seed: 42 #Use what you want here
-  energy: 4000 #In eV
+  energy: 12000 #In eV
+  primary_track_output_dir: primary_tracks/ #Degrad primary track output directory
 
 Gas_props:
   vd: 130 #Drift speed in um/ns
@@ -30,12 +31,18 @@ Sim_settings:
   randomize_primary_track_order: true #Randomizes order of tracks when generating primary tracks, generally a good idea to set this to True
   rotate_tracks: true #Set to True if you want to rotate the primary tracks so they are isotropic. Otherwise primary tracks are (1,0,0)
   parallel: true #Splits the degrad task into N chunks and concatenates the output. ONLY APPLIES TO DEGRAD PRIMARY TRACK SIM
-  parallel_chunks: 1    #only relevant if parallel is set to True. Must be <= n_tracks. n_tracks // parallel_chunks = 500 or 1000 performs well
+  parallel_chunks: 1     #only relevant if parallel is set to True. Must be <= n_tracks. n_tracks // parallel_chunks = 500 or 1000 performs well
+  
+  ###Below are intended for process_primary_tracks{_batch}.py but are also
+  ###relevant for run_and_process_degrad.py
+
+  digitization_input_file: data/split/20000ERs_2-11.8keV_550.feather #set the input file for process_primary_tracks.py 
   apply_drift: true #If True drift tracks
   apply_amplification: true #If true, simulate GEMs and amplify
   digitize: true #If true, simulate readout
   write_gain: false #If True, write out amplified charges (TAKES LOTS OF DISK SPACE)
-  overwrite_output: true #If True, when processing a primary tracks file, it writes out the processed information to the same file. Otherwise it will write a separate file
+  overwrite_output: false #If True, when processing a primary tracks file, it writes out the processed information to the same file. Otherwise it will write a separate file
+  output_dir: processed/ #Directory for MIGDAL processed output file. ONLY RELEVANT IF overwrite_output IS FALSE
 
 RCTRIM_settings: #RCTRIM requires a basedir that contains the subdirs 'C' and 'F' and nothing else
   SRIM_output_dir: /home/jeff/srim/SRIM Outputs/ #YOURS WILL BE DIFFERENT: This is the directory where your raw SRIM output is written to
@@ -47,7 +54,7 @@ RCTRIM_settings: #RCTRIM requires a basedir that contains the subdirs 'C' and 'F
   output_dir: data/ #outputh directory for generated primary tracks
 
 Migdal_sim: #Settings for combining ER and NR tracks for forming Migdals
-  ER_input_filepath: data/4.975keV_20000Events_all.feather
-  NR_input_filepath: RCTRIM/output/C_maxE699.997_19561primaryTracks.feather
+  ER_input_filepath: data/4.975keV_20000Events_all.feather #directory + filename of ER primary tracks
+  NR_input_filepath: RCTRIM/output/C_maxE699.997_19561primaryTracks.feather #directory + filename of NR primary tracks
   output_directory: migdal_primary_tracks/
-  randomize: false
+  randomize: false #randomize the ordering of ER and NR tracks before stitching them together

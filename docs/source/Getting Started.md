@@ -8,6 +8,7 @@ We recommend setting up a fresh python environment, however this isn't strictly 
 
 *numpy (not tested with the new (as of 2024) numpy 2.x.x, so I would highly recommend installing numpy < 2.0.0)
 *pandas
+*pyarrow (for reading and writing .feather files)
 *scipy
 *numba
 *pandas

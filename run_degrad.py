@@ -12,7 +12,7 @@ import time
 from scipy.spatial import KDTree #Determines if charge passes through GEM holes FAST
 
 class run_degrad:
-    def __init__(self,card_file,num_events,energy,W,randomize_track_order = True,truth_dir=np.array([1,0,0]), random_seed=0, rotate = False):
+    def __init__(self,card_file,outdir,num_events,energy,W,randomize_track_order = True,truth_dir=np.array([1,0,0]), random_seed=0, rotate = False):
         self.card_file = card_file
         self.num_events = num_events
         self.seed = random_seed
@@ -53,9 +53,9 @@ class run_degrad:
             outname = os.path.splitext(self.outfile_name)[0]+'_isotropic.feather'
         else:
             outname = os.path.splitext(self.outfile_name)[0]+'.feather'
-        if not os.path.exists('data'):
-            os.makedirs('data')
-        self.output.to_feather('data/'+outname)
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        self.output.to_feather(outdir+outname)
 
         '''Delete raw DEGRAD output'''
         self.remove_degrad_output()
@@ -223,6 +223,7 @@ if __name__ == '__main__':
         tpc_cfg = config['TPC_sim']
         
     card = degrad_cfg['input_file']
+    outdir = degrad_cfg['primary_track_output_dir']
     n_events = degrad_cfg['n_tracks']
     seed = degrad_cfg['seed']
     E = degrad_cfg['energy']
@@ -235,6 +236,7 @@ if __name__ == '__main__':
     if not parallel:
         '''Update card, run degrad, process output, save pandas dataframe as feather file'''
         run_degrad(card_file=card,
+                   outdir = outdir,
                    num_events=n_events,
                    energy = E,
                    random_seed = seed,
@@ -248,6 +250,7 @@ if __name__ == '__main__':
         start = time.time() #log start time
         for chunk in tqdm(range(0,nchunks)):
             run_degrad(card_file=card,
+                       outdir = outdir,
                        num_events=n_events,
                        energy = E,
                        random_seed = chunk,
@@ -257,7 +260,7 @@ if __name__ == '__main__':
 
         '''Check all files that were created after start'''
         files = []
-        outpath = 'data/'
+        outpath = outdir
         for filename in os.listdir(outpath):
             filepath = os.path.join(outpath, filename)
             if os.path.isfile(filepath):

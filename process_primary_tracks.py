@@ -11,8 +11,8 @@ import time
 from scipy.spatial import KDTree #Determines if charge passes through GEM holes FAST
 
 class process_tracks:
-    def __init__(self,infile,drift,v_drift,sigmaT,sigmaL, sigmaT_trans,sigmaL_trans,sigmaT_induc,
-                 sigmaL_induc,W,GEM_width, GEM_height, GEM_thickness,hole_diameter,
+    def __init__(self,infile,outpath,drift,v_drift,sigmaT,sigmaL, sigmaT_trans,sigmaL_trans,
+                 sigmaT_induc,sigmaL_induc,W,GEM_width, GEM_height, GEM_thickness,hole_diameter,
                  hole_pitch, amplify,gain, transfer_gap_length, induction_gap_length,
                  GEM2_offsetx, GEM2_offsety, truth_dir = np.array([1,0,0]), write_gain = False,
                  overwrite = False):
@@ -219,13 +219,13 @@ class process_tracks:
                     self.data['ygain2'], self.data['zgain'], self.data['zgain2'])
                 
         '''Save output dataframe'''
-        if not os.path.exists('data'):
-            os.makedirs('data')
         if overwrite:
             self.data.to_feather(infile)
         else:
-            outname = os.path.splitext(self.outfile_name)[0]+'_digitized.feather'
-            self.data.to_feather(os.path.split(infile)[0]+'/'+outname)
+            if not os.path.exists(outpath):
+                os.makedirs(outpath)
+            outname = os.path.split(os.path.splitext(infile)[0])[1]+'_digitized.feather'
+            self.data.to_feather(outpath+'/'+outname)
     
     def apply_diffusion(self, xs, ys, zs ,diffusion_length): #applies diffusion using input diffusion parameters
         x_diff = np.sqrt(diffusion_length)*self.sigmaT*1e-4*np.random.normal(0,1, len(zs))
@@ -349,8 +349,6 @@ class process_tracks:
 if __name__ == '__main__':
     import yaml
     from os import sys
-
-    infile = sys.argv[1] #infile needs to be the name of the infile
     
     '''Load configuration.yaml'''
     with open('configuration.yaml','r') as cfg:
@@ -360,6 +358,7 @@ if __name__ == '__main__':
         gas_cfg = config['Gas_props']
         tpc_cfg = config['TPC_sim']
         
+    infile = settings['digitization_input_file']
     W = gas_cfg['W']
     drift = settings['apply_drift']
     v_drift = gas_cfg['vd']
@@ -382,8 +381,10 @@ if __name__ == '__main__':
     gain = tpc_cfg['gain']
     write_gain = settings['write_gain']
     overwrite = settings['overwrite_output']
+    outpath = settings['output_dir']
 
     process_tracks(infile = infile,
+                   outpath = outpath,
                    W = W,
                    drift = drift,
                    v_drift = v_drift,
