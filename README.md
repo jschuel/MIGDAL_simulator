@@ -20,4 +20,4 @@ MIGDAL_simulator is an end-to-end simulation framework for the MIGDAL experiment
 
 Details about this simulator and how to use it can be found in the [official documentation](https://migdal-simulator.readthedocs.io/en/latest/index.html)
 
-[!fig](docs/source/figures/schematic.png)
+![fig](docs/source/figures/schematic.png)
