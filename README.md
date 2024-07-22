@@ -1,18 +1,23 @@
 # MIGDAL_simulator
-Tools for convenient degrad simulation for MIGDAL. Plan to add in a quick digitizer too.
 
-# Getting started
+**Please consult the [MIGDAL_simulator official documentation](https://migdal-simulator.readthedocs.io/en/latest/index.html) for information about installation, usage, and the features of this software.**
 
-1. Clone this repository `git clone git@github.com:jschuel/degrad_tools.git`
-2. In the `degrad_tools/` directory download the latest version of degrad
-   ```sh
-   wget https://degrad.web.cern.ch/degrad/degrad-3.19.f
-   ```
-3. Compile degrad with
-   ```sh
-   gfortran degrad-3.19.f -o degrad
-   ````
-   this will create an executable called `degrad`.
-4. Adjust the number of electron recoil tracks and energy of the tracks you want to simulate in `configuration.yaml`. **Note:** Eventually it would be nice to replace all contents of the card file with this configuration file. Currently I don't have gas properties here, so you'll have to manually edit the `.card` file to adjust things like gas mixture, pressure, electric field strength. As it stands the .card file has 100% CF4. The comments in `degrad-3.19.f` explain the parameters of the `.card` file if you want to manually edit it yourself
-5. Run `python3 run_and_process_degrad.py`. This script (1) automatically edits the `.card` file with the parameters of `configuration.yaml`, (2) runs degrad, (3) processes degrad's outputs to a track-indexed pandas dataframe, and (4) removes degrad's raw output.
-6. Analyze or further process the output `.feather` file as you please!
+MIGDAL_simulator is an end-to-end simulation framework for the MIGDAL experiment. The simulator integrates with [Degrad](https://degrad.web.cern.ch/degrad/) to generate primary electron recoil ionization distributions, and RCTRIM (private repository) to generate primary nuclear recoil ionization distributions. The simulator can then stitch together primary electronic and nuclear recoil tracks at their vertices to form primary ionization distributions for the Migdal effect. These primary tracks can then be passed through a single script that is configurable by a flexible `configuration.yaml` file. The script simulates:
+
+1. Drift with diffusion
+
+2. GEMs with user-specified hole size and pitch (assumes a honeycomb pattern of holes)
+
+3. GEM amplification
+
+4. Transfer gap diffusion
+
+5. Optical readout after the second GEM
+
+6. Induction gap diffusion
+
+7. Charge readout after amplified charge is drifted through the induction gap
+
+Details about this simulator and how to use it can be found in the (https://migdal-simulator.readthedocs.io/en/latest/index.html)[official documentation]
+
+[!fig](docs/source/figures/schematic.png)
