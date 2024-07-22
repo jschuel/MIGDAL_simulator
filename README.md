@@ -4,7 +4,7 @@
 
 ![fig](docs/source/figures/schematic.png)
 
-MIGDAL_simulator is an end-to-end simulation framework for the MIGDAL experiment. The simulator integrates with [Degrad](https://degrad.web.cern.ch/degrad/) to generate primary electron recoil ionization distributions, and RCTRIM (private repository) to generate primary nuclear recoil ionization distributions. The simulator can then stitch together primary electronic and nuclear recoil tracks at their vertices to form primary ionization distributions for the Migdal effect. These primary tracks can then be passed through a single script that is configurable by a flexible `configuration.yaml` file. The script simulates:
+MIGDAL_simulator is an end-to-end simulation framework for the MIGDAL experiment. The simulator integrates with [Degrad](https://degrad.web.cern.ch/degrad/) to generate primary electron recoil (ER) ionization distributions, and RCTRIM (private repository) to generate primary nuclear recoil (NR) ionization distributions. The simulator can then stitch together primary ER and NR tracks at their vertices to form primary ionization distributions for the Migdal effect. These primary tracks can then be passed through a single script that is configurable by a flexible `configuration.yaml` file. The script simulates:
 
 1. Drift with diffusion
 
