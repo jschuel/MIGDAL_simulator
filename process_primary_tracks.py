@@ -215,7 +215,12 @@ class process_tracks:
                 self.data['ER_frac_ITO'] = fracITO
             
             if not write_gain:
-                del(self.data['xgain'],self.data['xgain2'],self.data['ygain'],
+                if migdal:
+                    del(self.data['xgain'],self.data['xgain2'],self.data['ygain'],
+                        self.data['ygain2'], self.data['zgain'], self.data['zgain2'],
+                        self.data['IDgain']), self.data['IDgain2'])
+                else:
+                    del(self.data['xgain'],self.data['xgain2'],self.data['ygain'],
                     self.data['ygain2'], self.data['zgain'], self.data['zgain2'])
                 
         '''Save output dataframe'''
