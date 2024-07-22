@@ -18,6 +18,6 @@ MIGDAL_simulator is an end-to-end simulation framework for the MIGDAL experiment
 
 7. Charge readout after amplified charge is drifted through the induction gap
 
-Details about this simulator and how to use it can be found in the (https://migdal-simulator.readthedocs.io/en/latest/index.html)[official documentation]
+Details about this simulator and how to use it can be found in the [official documentation](https://migdal-simulator.readthedocs.io/en/latest/index.html)
 
 [!fig](docs/source/figures/schematic.png)
