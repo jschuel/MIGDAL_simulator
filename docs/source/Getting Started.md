@@ -6,16 +6,17 @@ MIGDAL_simulator is a python-based simulation framework. Here we will detail the
 
 We recommend setting up a fresh python environment, however this isn't strictly necessary. The following packages need to be installed in your python environment (all are available with `pip`):
 
-*numpy (not tested with the new (as of 2024) numpy 2.x.x, so I would highly recommend installing numpy < 2.0.0)
-*pandas
-*pyarrow (for reading and writing .feather files)
-*scipy
-*numba
-*pandas
-*matplotlib
-*tqdm
-*pyyaml
-*ruamel
+- numpy (not tested with the new (as of 2024) numpy 2.x.x, so I would highly recommend installing numpy < 2.0.0)
+- pandas
+- pyarrow (for reading and writing .feather files)
+- scipy
+- numba
+- pandas
+- matplotlib
+- tqdm
+- pyyaml
+- ruamel
+- jupyter
 
 ## (II) Clone the [MIGDAL_simulator git repository](https://github.com/jschuel/MIGDAL_simulator)
 
