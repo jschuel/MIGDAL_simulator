@@ -11,11 +11,11 @@ import time
 from scipy.spatial import KDTree #Determines if charge passes through GEM holes FAST
 
 class process_tracks:
-    def __init__(self,infile,outpath,drift,v_drift,sigmaT,sigmaL, sigmaT_trans,sigmaL_trans,
-                 sigmaT_induc,sigmaL_induc,W,GEM_width, GEM_height, GEM_thickness,hole_diameter,
-                 hole_pitch, amplify,gain, transfer_gap_length, induction_gap_length,
-                 GEM2_offsetx, GEM2_offsety, truth_dir = np.array([1,0,0]), write_gain = False,
-                 overwrite = False):
+    def __init__(self,infile,outpath,drift,min_drift_length,max_drift_length,v_drift,sigmaT,
+                 sigmaL, sigmaT_trans,sigmaL_trans, sigmaT_induc,sigmaL_induc, W, GEM_width,
+                 GEM_height, GEM_thickness,hole_diameter, hole_pitch, amplify,gain,
+                 transfer_gap_length, induction_gap_length, GEM2_offsetx, GEM2_offsety,
+                 truth_dir = np.array([1,0,0]), write_gain = False, overwrite = False):
 
         self.gain=gain
         self.W = W
@@ -40,7 +40,7 @@ class process_tracks:
         '''Apply drift if specified
         TODO: make drift length ranges a user input parameter in configuration.yaml'''
         if drift:
-            self.data['drift_length'] = np.random.uniform(1,2.5,len(self.data)) #cm
+            self.data['drift_length'] = np.random.uniform(min_drift_length,max_drift_length,len(self.data)) #cm
             self.data['z'] = self.data['z'].apply(lambda x: x-x.mean())
             self.data['z'] = self.data['drift_length']+self.data['z']
             '''Apply diffusion'''
@@ -136,8 +136,8 @@ class process_tracks:
                 if migdal:
                     NRgainidx = np.where(IDgainamp == 1)[0]
                     ERgainidx = np.where(IDgainamp == 0)[0]
-                    xgNR2, ygNR2, zgNR2 = self.GEM_gain_and_diffusion(xgainamp[NRgainidx],ygainamp[NRgainidx],zgainamp[NRgainidx],gap_length = transfer_gap_length + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans)
-                    xgER2, ygER2, zgER2 = self.GEM_gain_and_diffusion(xgainamp[ERgainidx],ygainamp[ERgainidx],zgainamp[ERgainidx],gap_length = transfer_gap_length + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans)
+                    xgNR2, ygNR2, zgNR2 = self.GEM_gain_and_diffusion(xgainamp[NRgainidx],ygainamp[NRgainidx],zgainamp[NRgainidx],gap_length = 0 + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans)
+                    xgER2, ygER2, zgER2 = self.GEM_gain_and_diffusion(xgainamp[ERgainidx],ygainamp[ERgainidx],zgainamp[ERgainidx],gap_length = 0 + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans)
                     IDgainER2 = [0 for i in range(0,len(xgER2))]
                     IDgainNR2 = [1 for i in range(0,len(xgNR2))]
                     xgain2 = np.concatenate((xgNR2,xgER2))
@@ -366,6 +366,8 @@ if __name__ == '__main__':
     infile = settings['digitization_input_file']
     W = gas_cfg['W']
     drift = settings['apply_drift']
+    min_drift_length = tpc_cfg['min_drift_length']
+    max_drift_length = tpc_cfg['max_drift_length']
     v_drift = gas_cfg['vd']
     sigmaT = gas_cfg['sigmaT']
     sigmaL = gas_cfg['sigmaL']
@@ -392,6 +394,8 @@ if __name__ == '__main__':
                    outpath = outpath,
                    W = W,
                    drift = drift,
+                   min_drift_length = min_drift_length,
+                   max_drift_length = max_drift_length,
                    v_drift = v_drift,
                    sigmaT = sigmaT,
                    sigmaL = sigmaL,
