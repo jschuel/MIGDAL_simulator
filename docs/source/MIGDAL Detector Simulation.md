@@ -48,9 +48,9 @@ The previous section detailed step (1), this section details step (2). In partic
 
 Currently MIGDAL_simulator only suports GEMs with honeycomb-patterns of holes
 
-- **GEM2_offsetx: x-coordinate offset of GEM2's holes w.r.t GEM1 in um. A value of 0 means GEM 2's holes are perfectly aligned to GEM1. A value of hole_pitch/2 means the holes are maximally misaligned.
+- **GEM2_offsetx** - x-coordinate offset of GEM2's holes w.r.t GEM1 in um. A value of 0 means GEM 2's holes are perfectly aligned to GEM1. A value of hole_pitch/2 means the holes are maximally misaligned.
 
-- **GEM2_offsety**: Same as above except it's the y-coordinate instead of x-coordinate.
+- **GEM2_offsety** - Same as above except it's the y-coordinate instead of x-coordinate.
 
 - **transfer_gap** - Length of the transfer gap (gap between GEM 1 and GEM 2) in cm
 
@@ -95,7 +95,7 @@ self.data['z'] = self.data['z'].apply(lambda x: x-x.mean())
 self.data['z'] = self.data['drift_length']+self.data['z']
 ```
 
-As you can see, the drift length is currently defined as the drift distance of the *center* (in z) of the track. If you want to change this to be, say, the distance of the ionization point closest to the GEM, you'll need to look through the source code and change `self.data['z'] = self.data['z'].apply(lambda x: x-x.mean())` to `self.data['z'] = self.data['z'].apply(lambda x: x-x**.min()**)`.
+As you can see, the drift length is currently defined as the drift distance of the *center* (in z) of the track. If you want to change this to be, say, the distance of the ionization point closest to the GEM, you'll need to look through the source code and change `self.data['z'] = self.data['z'].apply(lambda x: x-x.mean())` to `self.data['z'] = self.data['z'].apply(lambda x: x-x.min())`.
 
 Diffusion is applied assuming random Gaussian smearing of `x`, `y`, and `z` with a mean of 0 and a sigma of the product of the square root of the drift length of each ionization point (`self.data['z']` in the code block above) and the appropriate diffusion coefficient (transverse diffusion coefficient for `x` and `y`, and longitudinal for `z`). For each (x,y,z) triplet, the Gaussian smearing is drawn separately for `x`, `y`, and `z` (meaning a different smearing factor is used for each coordinate).
 
@@ -109,7 +109,7 @@ Each ionization electron passing through a GEM hole is amplified by random expon
 
 ### 4. Identify the ionization points passing through GEM 2
 
-Like GEM 1, GEM 2 also has a honeycomb pattern of holes. GEM 2 by default is also centered at (x=0,y=0), however the user may offset GEM 2 in both `x` and `y` with respect to GEM 1 with the `GEM_offsetx` and `GEM_offsety` parameters in `configuration.yaml`. Like before, we use a k-d tree to determine which amplified ionization points align with a GEM hole opening in GEM 2. Those that do are kept, those that don't are discarded. **For Migdal tracks**: The `ID` of each ionization electron (0 = nuclear recoil, 1 = electron recoil) is still kept track of here.
+Like GEM 1, GEM 2 also has a honeycomb pattern of holes. GEM 2 by default is also centered at (x=0,y=0), however the user may offset GEM 2 in both `x` and `y` with respect to GEM 1 with the `GEM2_offsetx` and `GEM2_offsety` parameters in `configuration.yaml`. Like before, we use a k-d tree to determine which amplified ionization points align with a GEM hole opening in GEM 2. Those that do are kept, those that don't are discarded. **For Migdal tracks**: The `ID` of each ionization electron (0 = nuclear recoil, 1 = electron recoil) is still kept track of here.
 
 ### 5. Apply amplification from GEM 2
 
