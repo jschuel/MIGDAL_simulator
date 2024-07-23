@@ -1,0 +1,3 @@
+# Analyzing Outputs
+
+Tutorial Jupyter Notebooks can be found in the `MIGDAL_simulator/notebook_tutorials` directory. `Analysis_tutorial.ipynb` has some examples of plotting events using a small test data set that's included in this package. Additionally it shows how new analysis variables can be formed for holistically assessing Migdal ER detection performance. While the included dataset is too small to gather much information, these tools can be extended to analyses on much larger data sets.
