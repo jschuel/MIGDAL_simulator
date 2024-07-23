@@ -24,6 +24,8 @@ TPC_sim:
   hole_pitch: 280 #GEM hole pitch in um
   transfer_gap: 0.2 #length of transfer gap cm
   induction_gap: 0.2 #length of induction gap cm
+  min_drift_length: 1 #cm.  Drift lengths are computed using a random uniform dist. between the min and max drift lengths specified here
+  max_drift_length: 2.5 #cm
   GEM2_offsetx: 0 #x coordinate offset of second GEM hole pattern to first in um
   GEM2_offsety: 0 #y coordinate offset of second GEM hole pattern to first in um
 
