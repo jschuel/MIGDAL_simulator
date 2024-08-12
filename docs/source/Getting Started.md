@@ -15,7 +15,7 @@ We recommend setting up a fresh python environment, however this isn't strictly 
 - matplotlib
 - tqdm
 - pyyaml
-- ruamel
+- ruamel.yaml
 - jupyter
 
 ## (II) Clone the [MIGDAL_simulator git repository](https://github.com/jschuel/MIGDAL_simulator)
