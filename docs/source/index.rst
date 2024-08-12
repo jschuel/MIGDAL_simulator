@@ -17,7 +17,7 @@ MIGDAL_simulator is an end-to-end simulation framework for the MIGDAL experiment
 
 1. Drift with diffusion
 2. GEMs with user-specified hole size and pitch (assumes a honeycomb pattern of holes)
-3. GEM amplification (**Update 08/12/2024**: Lazy GPU support has been added. This speeds up overall simulation time by a factor of ~3)
+3. GEM amplification (**Update 08/12/2024**: Lazy GPU support has been added. This speeds up overall simulation speed by maybe a factor of a few.)
 4. Transfer gap diffusion
 5. Optical readout after the second GEM
 6. Induction gap diffusion
