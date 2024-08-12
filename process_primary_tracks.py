@@ -9,14 +9,21 @@ import os
 from tqdm import tqdm
 import time
 from scipy.spatial import KDTree #Determines if charge passes through GEM holes FAST
+import torch
 
 class process_tracks:
     def __init__(self,infile,outpath,drift,min_drift_length,max_drift_length,v_drift,sigmaT,
                  sigmaL, sigmaT_trans,sigmaL_trans, sigmaT_induc,sigmaL_induc, W, GEM_width,
                  GEM_height, GEM_thickness,hole_diameter, hole_pitch, amplify,gain,
                  transfer_gap_length, induction_gap_length, GEM2_offsetx, GEM2_offsety,
-                 truth_dir = np.array([1,0,0]), write_gain = False, overwrite = False):
+                 truth_dir = np.array([1,0,0]), write_gain = False, overwrite = False, use_gpu = False):
 
+        self.gpu = use_gpu
+        if self.gpu:
+            try:
+                import torch
+            except:
+                print("Need to install pytorch if you want to simulate gain with a GPU")
         self.gain=gain
         self.W = W
         self.v_drift = v_drift
@@ -218,7 +225,7 @@ class process_tracks:
                 if migdal:
                     del(self.data['xgain'],self.data['xgain2'],self.data['ygain'],
                         self.data['ygain2'], self.data['zgain'], self.data['zgain2'],
-                        self.data['IDgain']), self.data['IDgain2'])
+                        self.data['IDgain'], self.data['IDgain2'])
                 else:
                     del(self.data['xgain'],self.data['xgain2'],self.data['ygain'],
                     self.data['ygain2'], self.data['zgain'], self.data['zgain2'])
@@ -297,19 +304,40 @@ class process_tracks:
             end_ind = np.sum(gain_electrons[:enum[0]+1])
             x_post[start_ind:end_ind] = x[enum] + np.sqrt(gap_length)*diff_coeff*1E-4*np.random.normal(0,1,val)
 
+    def generate_gain_points_GPU(self, x, gain_electrons, gap_length, diff_coeff):
+        gain_electrons = gain_electrons.to('cuda')
+        x = torch.tensor(x).to('cuda')
+        gain_cumsum = torch.cumsum(gain_electrons, dim=0)
+        start_indices = torch.zeros_like(gain_electrons, dtype=torch.int, device='cuda')
+        start_indices[1:] = gain_cumsum[:-1]
+        end_indices = gain_cumsum
+        noise = np.sqrt(gap_length) * diff_coeff * 1E-4 * torch.randn(int(torch.sum(gain_electrons).item()), device='cuda')
+        x_repeated = x.repeat_interleave(gain_electrons)
+        return x_repeated+noise
+
     def GEM_gain_and_diffusion(self,x,y,z,gap_length, diff_coeff_trans, diff_coeff_long): #Applies gain and readout resolution smearing
-        gain_electrons = np.random.exponential(np.sqrt(self.gain), len(x))
-        gain_electrons = np.asarray(gain_electrons, dtype=int)
-        
-        x_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
-        y_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
-        z_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
 
-        self.generate_gain_points(x, x_post, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_trans)
-        self.generate_gain_points(y, y_post, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_trans)
-        self.generate_gain_points(z, z_post, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_long)
+        if not self.gpu:
+            gain_electrons = np.random.exponential(np.sqrt(self.gain), len(x))
+            gain_electrons = np.asarray(gain_electrons, dtype=int)
+            x_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
+            y_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
+            z_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
 
-        return x_post, y_post, z_post
+            self.generate_gain_points(x, x_post, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_trans)
+            self.generate_gain_points(y, y_post, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_trans)
+            self.generate_gain_points(z, z_post, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_long)
+
+            return x_post, y_post, z_post
+
+        else:
+            exponential_dist = torch.distributions.Exponential(1.0 / np.sqrt(self.gain))
+            gain_electrons = exponential_dist.sample((len(x),)).to(dtype=torch.int)
+            x_post = self.generate_gain_points_GPU(x, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_trans)
+            y_post = self.generate_gain_points_GPU(y, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_trans)
+            z_post = self.generate_gain_points_GPU(z, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_long)
+
+            return x_post.cpu().numpy(), y_post.cpu().numpy(), z_post.cpu().numpy()
 
     def digitize_camera_migdal(self,x,y,ID):
         NRidx = np.where(ID == 1)[0]
@@ -389,6 +417,7 @@ if __name__ == '__main__':
     write_gain = settings['write_gain']
     overwrite = settings['overwrite_output']
     outpath = settings['output_dir']
+    gpu = settings['gpu']
 
     process_tracks(infile = infile,
                    outpath = outpath,
@@ -415,4 +444,5 @@ if __name__ == '__main__':
                    amplify=amplify,
                    write_gain=write_gain,
                    gain=gain,
-                   overwrite=overwrite)
+                   overwrite=overwrite,
+                   use_gpu = gpu)
