@@ -9,7 +9,6 @@ import os
 from tqdm import tqdm
 import time
 from scipy.spatial import KDTree #Determines if charge passes through GEM holes FAST
-import torch
 
 class process_tracks:
     def __init__(self,infile,outpath,drift,min_drift_length,max_drift_length,v_drift,sigmaT,
@@ -19,11 +18,6 @@ class process_tracks:
                  truth_dir = np.array([1,0,0]), write_gain = False, overwrite = False, use_gpu = False):
 
         self.gpu = use_gpu
-        if self.gpu:
-            try:
-                import torch
-            except:
-                print("Need to install pytorch if you want to simulate gain with a GPU")
         self.gain=gain
         self.W = W
         self.v_drift = v_drift
@@ -168,6 +162,9 @@ class process_tracks:
                 qcam.append(qc)
                 if migdal:
                     fraccam.append(fracc)
+
+                if self.gpu:
+                    torch.cuda.empty_cache()
             
             self.data['xdiff'] = xdiff
             self.data['ydiff'] = ydiff
@@ -229,7 +226,7 @@ class process_tracks:
                 else:
                     del(self.data['xgain'],self.data['xgain2'],self.data['ygain'],
                     self.data['ygain2'], self.data['zgain'], self.data['zgain2'])
-                
+
         '''Save output dataframe'''
         if overwrite:
             self.data.to_feather(infile)
@@ -418,6 +415,9 @@ if __name__ == '__main__':
     overwrite = settings['overwrite_output']
     outpath = settings['output_dir']
     gpu = settings['gpu']
+
+    if gpu:
+        import torch
 
     process_tracks(infile = infile,
                    outpath = outpath,

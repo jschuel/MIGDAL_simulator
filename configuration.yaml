@@ -41,7 +41,7 @@ Sim_settings:
   digitization_input_file: primary_tracks/big_migs.feather #set the input file for process_primary_tracks.py 
   apply_drift: true #If True drift tracks
   apply_amplification: true #If true, simulate GEMs and amplify
-  gpu: False #If true, try to process on gpu. If False, don't. Only implemented for process_primary_tracks.py
+  gpu: True #If true, try to process on gpu. If False, don't. Only implemented for process_primary_tracks.py
   digitize: true #If true, simulate readout
   write_gain: false #If True, write out amplified charges (TAKES LOTS OF DISK SPACE)
   overwrite_output: false #If True, when processing a primary tracks file, it writes out the processed information to the same file. Otherwise it will write a separate file
