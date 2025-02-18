@@ -29,7 +29,7 @@ TPC_sim: #Detector simulation.
   min_drift_length: 2.5 #cm.  Drift lengths are computed using a random uniform dist. between the min and max drift lengths specified here
   max_drift_length: 2.5 #cm...originally 2.5 increased for longer ERs
   ### GEM offsets are listed as a list. Length of this list should match nGEM. If not entered as a list, offsets for all GEMs will default to being 0
-  GEM_offsetsx: [0,210,0,210] #list of GEM offsets in x. List entries be entered as intengers or floats. For 3 GEMs w/ 280um pitch [0,0,0] is max aligned and [0,210,0] is max misaligned, where max misalign in x is 3*pitch/4.
+  GEM_offsetsx: [0,210,0,210] #list of GEM hole offsets in x (in um). List entries be entered as intengers or floats. For 3 GEMs w/ 280um pitch [0,0,0] is max aligned and [0,210,0] is max misaligned, where max misalign in x is 3*pitch/4.
   GEM_offsetsy: [0,121.244,0,121.244] #list of GEM offsets in y. Offsets are relative to the first GEM, so [0,121.244,0] means GEM 1 and 3 are aligned with eachother but GEM 2 is maximally misaligned (GEM_pitch/2 * sqrt(3)/2)
 
 Sim_settings:
