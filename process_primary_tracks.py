@@ -1,7 +1,4 @@
-'''JTS 06/26/2024: Wrapper code for running FORTRAN executables. This code adjusts the number of tracks, energy, and seed
-values from the FORTRAN input card file. After running the executable, the code processes the output into a track-indexed
-pandas dataframe that includes the number of ionization electrons, x,y, and z information of the ER (in um), and the timing 
-information in ps. A flag is also included for  1, fluorescence; 2, pair production; 3, bremsstrahlung; 0, otherwise'''
+'''Loads in an input file processed with Jeff's fork of RCTRIM and then simulates, drift, diffusion, amplification and digitization'''
 
 import pandas as pd
 import numpy as np
@@ -11,15 +8,16 @@ import time
 from scipy.spatial import KDTree #Determines if charge passes through GEM holes FAST
 
 class process_tracks:
-    def __init__(self,infile,outpath,drift,min_drift_length,max_drift_length,v_drift,sigmaT,
-                 sigmaL, sigmaT_trans,sigmaL_trans, sigmaT_induc,sigmaL_induc, W, GEM_width,
-                 GEM_height, GEM_thickness,hole_diameter, hole_pitch, amplify,gain,
-                 transfer_gap_length, induction_gap_length, GEM2_offsetx, GEM2_offsety,
-                 truth_dir = np.array([1,0,0]), write_gain = False, overwrite = False, use_gpu = False):
+    def __init__(self,infile,outpath,nGEM,drift,min_drift_length,max_drift_length,v_drift,sigmaT,
+                 sigmaL, sigmaT_trans,sigmaL_trans, sigmaT_induc,sigmaL_induc, GEM_width,
+                 GEM_height, GEM_thickness, hole_diameter, hole_pitch, extra_GEM_diffusion, amplify,gain,
+                 transfer_gap_length, induction_gap_length, GEM_offsetsx, GEM_offsetsy,
+                 randomize_position, write_gain = False, overwrite = False, use_gpu = False):
 
         self.gpu = use_gpu
-        self.gain=gain
-        self.W = W
+        self.nGEM = int(nGEM)
+        self.gain=gain**(1/self.nGEM) #scale of random exponential for amplification.
+        self.randomize_position = randomize_position
         self.v_drift = v_drift
         self.sigmaT = sigmaT
         self.sigmaL = sigmaL
@@ -27,22 +25,37 @@ class process_tracks:
         self.GEM_height = GEM_height
         self.hole_diameter = hole_diameter
         self.hole_pitch = hole_pitch
-        self.GEM2_offsetx = GEM2_offsetx
-        self.GEM2_offsety = GEM2_offsety
-        self.truth_dir = truth_dir
+        self.GEM_offsetsx = GEM_offsetsx
+        self.GEM_offsetsy = GEM_offsetsy
+        self.extra_GEM_diffusion = extra_GEM_diffusion
+        
         print(infile)
 
-        self.data = pd.read_feather(infile)
+        self.data = pd.read_feather(infile)[:10]
         if 'ID' in self.data.columns: #autocheck if the event is a Migdal
-            migdal = True
+            self.migdal = True
         else:
-            migdal = False
+            self.migdal = False
 
-        '''Apply drift if specified
-        TODO: make drift length ranges a user input parameter in configuration.yaml'''
+        '''Randomize position if specified'''
+        if self.randomize_position:
+            self.data['xshift'] = np.random.uniform(-4,4,len(self.data))
+            self.data['yshift'] = np.random.uniform(-2.25,2.25,len(self.data))
+        else:
+            self.data['xshift'] = 0
+            self.data['yshift'] = 0
+            
+        '''Apply drift if specified'''
         if drift:
+            #self.data['z'] = self.data['z'].apply(lambda x: x-x.min())
+            #deltaz = self.data['z'].apply(lambda x: x.max()-x.min())
+            #self.data['drift_length'] = [np.random.uniform(deltaz.iloc[i],deltaz.iloc[i]+3) for i in range(0,len(deltaz))] #cm
+            #self.data['z'] = self.data['drift_length']+self.data['z']
             self.data['drift_length'] = np.random.uniform(min_drift_length,max_drift_length,len(self.data)) #cm
-            self.data['z'] = self.data['z'].apply(lambda x: x-x.mean())
+            
+            self.data['x'] = self.data['x'] + self.data['xshift']
+            self.data['y'] = self.data['y'] + self.data['yshift']
+            self.data['z'] = self.data['z'].apply(lambda x: x-x.min())
             self.data['z'] = self.data['drift_length']+self.data['z']
             '''Apply diffusion'''
             xdiff = []
@@ -57,175 +70,93 @@ class process_tracks:
             self.data['xdiff'] = xdiff
             self.data['ydiff'] = ydiff
             self.data['zdiff'] = zdiff
+        else:
+            self.data['xdiff'] = self.data['x']
+            self.data['ydiff'] = self.data['y']
+            self.data['zdiff'] = self.data['z']
             
         '''Amplify if specified'''
         if amplify:
-            #GEM 1 with KDtree
-            self.hole_positions1 = self.create_GEM_holes() #no offset in GEM holes
-            self.hole_tree1 = KDTree(self.hole_positions1)
-            #GEM 2 with KDtree
-            self.hole_positions2 = self.create_GEM_holes(offsetx=self.GEM2_offsetx,offsety=self.GEM2_offsety)
-            self.hole_tree2 = KDTree(self.hole_positions2)
-            xamps = []
-            yamps = []
-            zamps = []
-            IDamps = [] #only relevant for Migdals...this keeps track of ER vs NR
-            xgains = []
-            ygains = []
-            zgains = []
-            IDgains = [] #only relevant for Migdals...this keeps track of ER vs NR
-            xgains2 = [] #Position after second GEM gain
-            ygains2 = []
-            zgains2 = []
-            IDgains2 = [] #only relevant for Migdals...this keeps track of ER vs NR
-            xcam = [] #digitized camera
-            ycam = []
-            qcam = []
-            fraccam = [] #only relevant for Migdals...this gives fractional ER content in pixel
-            xITO = [] #digitized ITO
-            zITO = []
-            qITO = []
-            fracITO = []
+            #Populate lists of hole positions for each GEM
+            if type(self.GEM_offsetsx) is list or type(self.GEM_offsetsy) is list:
+                if len(self.GEM_offsetsx) != len(self.GEM_offsetsy):
+                    raise ValueError("If GEM_offsetsx or GEM_offsetsy are declared as a list, both must have the same length. Modify these fields in configuration.yaml appropriately.")
+                elif self.nGEM > len(self.GEM_offsetsx):
+                    raise ValueError("Number of GEMs must be <= number of entries in GEM_offset{x,y}. Modify these fields in configuration.yaml accordingly.")
+                else:
+                    #Create a list of GEM hole positions with appropriate offset. We only fill up to nGEM, so if nGEM < len(GEM_offsets), we ignore the rest of GEM_offsets
+                    self.hole_positions = [self.create_GEM_holes(offsetx=self.GEM_offsetsx[i],offsety=self.GEM_offsetsy[i]) for i in range(self.nGEM)]
+                    
+            else: #Make GEMs aligned if offsets are not a list
+                self.hole_positions = [self.create_GEM_holes(offsetx=0,offsety=0) for i in range(self.nGEM)]
+
+            #Create a KDTree of hole positions to quickly check if charge passes through GEM
+            self.hole_trees = [KDTree(self.hole_positions[i]) for i in range(self.nGEM)]
+
+            #Output branches
+            xcam, ycam, qcam, fraccam = [], [], [], []
+            xITO, zITO, qITO, fracITO = [], [], [], []
+
+            #Apply gain and digitize on a track-by-track basis
             for i in tqdm(range(len(self.data))):
                 event = self.data.iloc[i]
-                if migdal:
+                #Initial track condition
+                if self.migdal:
                     track = np.array([event['xdiff'],event['ydiff'],event['zdiff'],event['ID']]).T
                 else:
                     track = np.array([event['xdiff'],event['ydiff'],event['zdiff']]).T
-                charges_passing_through = np.array([charge for charge in track if self.is_within_GEMhole(charge[0], charge[1], self.hole_tree1)])
-                xamp = charges_passing_through[:,0]
-                yamp = charges_passing_through[:,1]
-                zamp = charges_passing_through[:,2]
-                if migdal:
-                    IDamp = charges_passing_through[:,3]
-                    IDamps.append(IDamp)
-                xamps.append(xamp)
-                yamps.append(yamp)
-                zamps.append(zamp)
-                '''Apply first amplification'''
-                if migdal:
-                    NRidx = np.where(IDamp == 1)[0]
-                    ERidx = np.where(IDamp == 0)[0]
-                    xgNR, ygNR, zgNR = self.GEM_gain_and_diffusion(xamp[NRidx],yamp[NRidx],zamp[NRidx],gap_length = transfer_gap_length + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans)
-                    xgER, ygER, zgER = self.GEM_gain_and_diffusion(xamp[ERidx],yamp[ERidx],zamp[ERidx],gap_length = transfer_gap_length + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans)
-                    IDgainER = [0 for i in range(0,len(xgER))]
-                    IDgainNR = [1 for i in range(0,len(xgNR))]
-                    xgain = np.concatenate((xgNR,xgER))
-                    ygain = np.concatenate((ygNR,ygER))
-                    zgain = np.concatenate((zgNR,zgER))
-                    IDgain = np.concatenate((IDgainNR,IDgainER))
-                else:
-                    xgain,ygain,zgain = self.GEM_gain_and_diffusion(xamp,yamp,zamp,gap_length = transfer_gap_length + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm GEM_thickness is in cm
-                xgains.append(xgain)
-                ygains.append(ygain)
-                zgains.append(zgain)
-                if migdal:
-                    IDgains.append(IDgain)
+
+                #loop and apply amplification through each GEM
+                for i in range(self.nGEM):
+                    # Filter the charges that fall within the GEM holes for this stage.
+                    track = np.array([charge for charge in track if self.is_within_GEMhole(charge[0], charge[1], self.hole_trees[i])])
+                    if len(track) == 0:
+                        # If no charge makes it through, exit the loop.
+                        break
+                    gap_length = transfer_gap_length + self.extra_GEM_diffusion if i != self.nGEM-1 else self.extra_GEM_diffusion
+                    track = self.apply_amplification(track,gap_length)
+
                     
-                '''Figure out which charges make it thru second GEM hole'''
-                if migdal:
-                    gaintrack = np.array([xgain,ygain,zgain,IDgain]).T
+                # After processing all GEM stages, digitize the camera
+                if self.migdal:
+                    xc, yc, qc, fracc = self.digitize_camera_migdal(track[:, 0], track[:, 1], track[:, 3])
+                    fraccam.append(fracc)
                 else:
-                    gaintrack = np.array([xgain,ygain,zgain]).T
-                charges_passing_through_gain = np.array([charge for charge in gaintrack if self.is_within_GEMhole(charge[0], charge[1], self.hole_tree2)])
-                xgainamp = charges_passing_through_gain[:,0]
-                ygainamp = charges_passing_through_gain[:,1]
-                zgainamp = charges_passing_through_gain[:,2]
-                if migdal:
-                    IDgainamp = charges_passing_through_gain[:,3]
-                '''Apply second amplification for camera'''
-                if migdal:
-                    NRgainidx = np.where(IDgainamp == 1)[0]
-                    ERgainidx = np.where(IDgainamp == 0)[0]
-                    xgNR2, ygNR2, zgNR2 = self.GEM_gain_and_diffusion(xgainamp[NRgainidx],ygainamp[NRgainidx],zgainamp[NRgainidx],gap_length = 0 + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans)
-                    xgER2, ygER2, zgER2 = self.GEM_gain_and_diffusion(xgainamp[ERgainidx],ygainamp[ERgainidx],zgainamp[ERgainidx],gap_length = 0 + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans)
-                    IDgainER2 = [0 for i in range(0,len(xgER2))]
-                    IDgainNR2 = [1 for i in range(0,len(xgNR2))]
-                    xgain2 = np.concatenate((xgNR2,xgER2))
-                    ygain2 = np.concatenate((ygNR2,ygER2))
-                    zgain2 = np.concatenate((zgNR2,zgER2))
-                    IDgain2 = np.concatenate((IDgainNR2,IDgainER2))
-                else:
-                    xgain2,ygain2,zgain2 = self.GEM_gain_and_diffusion(xgainamp,ygainamp,zgainamp,gap_length = 0 + GEM_thickness / 3, diff_coeff_trans = sigmaT_trans, diff_coeff_long = sigmaL_trans) #transfer gap is 0.2cm; GEM_thickness is in cm
-                xgains2.append(xgain2)
-                ygains2.append(ygain2)
-                zgains2.append(zgain2)
-                if migdal:
-                    IDgains2.append(IDgain2)
-                '''Digitize camera readout'''
-                if migdal:
-                    xc,yc,qc,fracc = self.digitize_camera_migdal(xgain2,ygain2,IDgain2)
-                else:
-                    xc,yc,qc = self.digitize_camera(xgain2,ygain2)
+                    xc, yc, qc = self.digitize_camera(track[:, 0], track[:, 1])
                 xcam.append(xc)
                 ycam.append(yc)
                 qcam.append(qc)
-                if migdal:
-                    fraccam.append(fracc)
 
-                if self.gpu:
-                    torch.cuda.empty_cache()
+                # Apply extra induction gap diffusion before digitizing ITO
+                track[:, 0] += np.sqrt(induction_gap_length) * sigmaT_induc * 1e-4 * np.random.normal(0, 1, len(track))
+                track[:, 1] += np.sqrt(induction_gap_length) * sigmaT_induc * 1e-4 * np.random.normal(0, 1, len(track))
+                track[:, 2] += np.sqrt(induction_gap_length) * sigmaL_induc * 1e-4 * np.random.normal(0, 1, len(track))
             
-            self.data['xdiff'] = xdiff
-            self.data['ydiff'] = ydiff
-            self.data['zdiff'] = zdiff
-                
-            self.data['xamp'] = xamps
-            self.data['yamp'] = yamps
-            self.data['zamp'] = zamps
-            if migdal:
-                self.data['IDamp'] = IDamps
-
-            self.data['xgain'] = xgains
-            self.data['ygain'] = ygains
-            self.data['zgain'] = zgains
-            if migdal:
-                self.data['IDgain'] = IDgains
-
-            self.data['xgain2'] = xgains2
-            self.data['ygain2'] = ygains2
-            self.data['zgain2'] = zgains2
-            if migdal:
-                self.data['IDgain2'] = IDgains2
-
-            self.data['xcam'] = xcam
-            self.data['ycam'] = ycam
-            self.data['qcam'] = qcam
-            self.data['qcam'] = self.data['qcam'].apply(lambda x: x.astype('int16'))
-            if migdal:
-                self.data['ER_frac_cam'] = fraccam
-
-            '''Apply extra induction gap diffusion for ITO sim'''
-            self.data['xgain2'] = self.data['xgain2'].apply(lambda x: x+np.sqrt(induction_gap_length)*sigmaT_induc*1e-4*np.random.normal(0,1,len(x)))
-            self.data['ygain2'] = self.data['ygain2'].apply(lambda x: x+np.sqrt(induction_gap_length)*sigmaT_induc*1e-4*np.random.normal(0,1,len(x)))
-            self.data['zgain2'] = self.data['zgain2'].apply(lambda x: x+np.sqrt(induction_gap_length)*sigmaL_induc*1e-4*np.random.normal(0,1,len(x)))
-
-            '''Digitize ITO'''
-            for i in range(0,len(self.data)):
-                track = self.data.iloc[i]
-                if migdal:
-                    xi,zi,qi,fraci = self.digitize_ITO_migdal(track['xgain2'],track['zgain2'],track['IDgain2'])
+                # Digitize ITO
+                if self.migdal:
+                    xi, zi, qi, fraci = self.digitize_ITO_migdal(track[:, 0], track[:, 2], track[:, 3])
                     fracITO.append(fraci)
                 else:
-                    xi,zi,qi = self.digitize_ITO(track['xgain2'],track['zgain2'])
-                xITO.append(xi)
-                zITO.append(zi)
-                qITO.append(qi)
+                    xi, zi, qi = self.digitize_ITO(track[:, 0], track[:, 2])
+                    xITO.append(xi)
+                    zITO.append(zi)
+                    qITO.append(qi)
+                    
+                if self.gpu:
+                    torch.cuda.empty_cache()
+
+            # Save the digitized outputs to self.data.
+            self.data['xcam'] = xcam
+            self.data['ycam'] = ycam
+            # Convert the camera charge to an unsigned 16-bit integer array.
+            self.data['qcam'] = [np.array(q).astype('uint16') for q in qcam]
 
             self.data['xITO'] = xITO
             self.data['zITO'] = zITO
             self.data['qITO'] = qITO
-            if migdal:
+            if self.migdal:
+                self.data['ER_frac_cam'] = fraccam
                 self.data['ER_frac_ITO'] = fracITO
-            
-            if not write_gain:
-                if migdal:
-                    del(self.data['xgain'],self.data['xgain2'],self.data['ygain'],
-                        self.data['ygain2'], self.data['zgain'], self.data['zgain2'],
-                        self.data['IDgain'], self.data['IDgain2'])
-                else:
-                    del(self.data['xgain'],self.data['xgain2'],self.data['ygain'],
-                    self.data['ygain2'], self.data['zgain'], self.data['zgain2'])
 
         '''Save output dataframe'''
         if overwrite:
@@ -233,8 +164,57 @@ class process_tracks:
         else:
             if not os.path.exists(outpath):
                 os.makedirs(outpath)
-            outname = os.path.split(os.path.splitext(infile)[0])[1]+'_digitized.feather'
-            self.data.to_feather(outpath+'/'+outname)
+            outname = os.path.split(os.path.splitext(infile)[0])[1]+'_%sGEMs_%sgain_digitized.feather'%(self.nGEM,gain)
+            self.data.to_feather(os.path.join(outpath,outname))
+
+    #Method to apply GEM amplification
+    def apply_amplification(self,track,gap_length):
+        if self.migdal:
+            # Separate out NR and ER charges.
+            NRidx = np.where(track[:, 3] == 1)[0]
+            ERidx = np.where(track[:, 3] == 0)[0]
+
+            # Process the NR charges if they exist.
+            if len(NRidx) > 0:
+                xNR, yNR, zNR = self.GEM_gain_and_diffusion(
+                    track[NRidx, 0], track[NRidx, 1], track[NRidx, 2],
+                    gap_length=gap_length,
+                    diff_coeff_trans=sigmaT_trans,
+                    diff_coeff_long=sigmaL_trans
+                )
+            else:
+                xNR, yNR, zNR = np.array([]), np.array([]), np.array([])
+
+            # Process the ER charges if they exist.
+            if len(ERidx) > 0:
+                xER, yER, zER = self.GEM_gain_and_diffusion(
+                    track[ERidx, 0], track[ERidx, 1], track[ERidx, 2],
+                    gap_length=gap_length,
+                    diff_coeff_trans=sigmaT_trans,
+                    diff_coeff_long=sigmaL_trans
+                )
+            else:
+                xER, yER, zER = np.array([]), np.array([]), np.array([])
+
+            # Recombine the results and rebuild the track.
+            new_x = np.concatenate((xNR, xER))
+            new_y = np.concatenate((yNR, yER))
+            new_z = np.concatenate((zNR, zER))
+            # Recreate the ID array (order matters; here NR charges get a value of 1, ER of 0)
+            new_ID = np.concatenate((np.ones(len(xNR)), np.zeros(len(xER))))
+            track = np.column_stack((new_x, new_y, new_z, new_ID))
+            
+        else:
+            # Non-migdal case: simply update x, y, z.
+            xgain, ygain, zgain = self.GEM_gain_and_diffusion(
+                track[:, 0], track[:, 1], track[:, 2],
+                gap_length=gap_length,
+                diff_coeff_trans=sigmaT_trans,
+                diff_coeff_long=sigmaL_trans
+            )
+            track = np.column_stack((xgain, ygain, zgain))
+            
+            return track
     
     def apply_diffusion(self, xs, ys, zs ,diffusion_length): #applies diffusion using input diffusion parameters
         x_diff = np.sqrt(diffusion_length)*self.sigmaT*1e-4*np.random.normal(0,1, len(zs))
@@ -264,7 +244,7 @@ class process_tracks:
     '''
     '''Creates honeycomb grid of GEM holes with user-input diameter and pitch'''
     def create_GEM_holes(self,offsetx=0,offsety=0): #offsets of second GEM relative to first
-        # Convert micrometers to centimeters for plotting
+        # Convert micrometers to centimeters
         hole_diameter_cm = self.hole_diameter / 10000  # cm
         self.hole_radius_cm = hole_diameter_cm / 2
         hole_pitch_cm = self.hole_pitch / 10000  # cm
@@ -315,7 +295,7 @@ class process_tracks:
     def GEM_gain_and_diffusion(self,x,y,z,gap_length, diff_coeff_trans, diff_coeff_long): #Applies gain and readout resolution smearing
 
         if not self.gpu:
-            gain_electrons = np.random.exponential(np.sqrt(self.gain), len(x))
+            gain_electrons = np.random.exponential(self.gain, len(x))
             gain_electrons = np.asarray(gain_electrons, dtype=int)
             x_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
             y_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
@@ -328,7 +308,7 @@ class process_tracks:
             return x_post, y_post, z_post
 
         else:
-            exponential_dist = torch.distributions.Exponential(1.0 / np.sqrt(self.gain))
+            exponential_dist = torch.distributions.Exponential(1.0 / self.gain)
             gain_electrons = exponential_dist.sample((len(x),)).to(dtype=torch.int)
             x_post = self.generate_gain_points_GPU(x, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_trans)
             y_post = self.generate_gain_points_GPU(y, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_trans)
@@ -387,10 +367,12 @@ if __name__ == '__main__':
         settings = config['Sim_settings']
         gas_cfg = config['Gas_props']
         tpc_cfg = config['TPC_sim']
-        
-    infile = settings['digitization_input_file']
-    W = gas_cfg['W']
+    if len(sys.argv) == 1:
+        infile = settings['digitization_input_file']
+    else:
+        infile = sys.argv[1]
     drift = settings['apply_drift']
+    nGEM = tpc_cfg['nGEM']
     min_drift_length = tpc_cfg['min_drift_length']
     max_drift_length = tpc_cfg['max_drift_length']
     v_drift = gas_cfg['vd']
@@ -405,12 +387,14 @@ if __name__ == '__main__':
     GEM_thickness = tpc_cfg['GEM_thickness']
     hole_diameter = tpc_cfg['hole_diameter']
     hole_pitch = tpc_cfg['hole_pitch']
-    trans_gap = tpc_cfg['transfer_gap']
-    induc_gap = tpc_cfg['induction_gap']
-    GEM2_offsetx = tpc_cfg['GEM2_offsetx']
-    GEM2_offsety = tpc_cfg['GEM2_offsety']
+    trans_gap = tpc_cfg['transfer_gap_length']
+    induc_gap = tpc_cfg['induction_gap_length']
+    GEM_offsetsx = tpc_cfg['GEM_offsetsx']
+    GEM_offsetsy = tpc_cfg['GEM_offsetsy']
+    extra_GEM_diffusion = tpc_cfg['extra_GEM_diffusion']
     amplify = settings['apply_amplification']
     gain = tpc_cfg['gain']
+    randomize_position = settings['randomize_position']
     write_gain = settings['write_gain']
     overwrite = settings['overwrite_output']
     outpath = settings['output_dir']
@@ -421,7 +405,7 @@ if __name__ == '__main__':
 
     process_tracks(infile = infile,
                    outpath = outpath,
-                   W = W,
+                   nGEM = nGEM,
                    drift = drift,
                    min_drift_length = min_drift_length,
                    max_drift_length = max_drift_length,
@@ -439,8 +423,10 @@ if __name__ == '__main__':
                    hole_pitch=hole_pitch,
                    transfer_gap_length = trans_gap,
                    induction_gap_length = induc_gap,
-                   GEM2_offsetx = GEM2_offsetx,
-                   GEM2_offsety = GEM2_offsety,
+                   GEM_offsetsx = GEM_offsetsx,
+                   GEM_offsetsy = GEM_offsetsy,
+                   extra_GEM_diffusion = extra_GEM_diffusion,
+                   randomize_position = randomize_position,
                    amplify=amplify,
                    write_gain=write_gain,
                    gain=gain,
