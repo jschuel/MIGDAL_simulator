@@ -16,7 +16,7 @@ Gas_props: #Gas properties
   W: 34.2 #eV value is for CF4
 
 TPC_sim: #Detector simulation.
-  nGEM: 1 #Number of GEMs. Code now supports any number
+  nGEM: 4 #Number of GEMs. Code now supports any number
   gain: 2000 #Total gain across all GEMs. Computed in simulation as gain**(1/nGEM)
   GEM_width: 10 #cm
   GEM_height: 10 #cm
