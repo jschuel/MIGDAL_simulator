@@ -1,11 +1,11 @@
-Degrad_card:
+Degrad_card: #Settings for simulating ERs in degrad
   input_file: input.card   #Name of input card file. run_and_process_degrad.py adjusts the parameters below in the card file
-  n_tracks: 100     #Number of ERs to simulate
+  n_tracks: 10000     #Number of ERs to simulate
   seed: 42 #Use what you want here
-  energy: 50000 #In eV
+  energy: 20000 #4950 #In eV
   primary_track_output_dir: primary_tracks/ #Degrad primary track output directory
 
-Gas_props:
+Gas_props: #Gas properties
   vd: 130 #Drift speed in um/ns
   sigmaT: 264 #Transverse diffusion in um/sqrt(cm)
   sigmaL: 167 #Longitudinal diffusion in um/sqrt(cm)
@@ -15,33 +15,34 @@ Gas_props:
   sigmaL_induc: 158
   W: 34.2 #eV value is for CF4
 
-TPC_sim:
-  gain: 90000 #Double GEM gain
+TPC_sim: #Detector simulation.
+  nGEM: 1 #Number of GEMs. Code now supports any number
+  gain: 2000 #Total gain across all GEMs. Computed in simulation as gain**(1/nGEM)
   GEM_width: 10 #cm
   GEM_height: 10 #cm
   GEM_thickness: 0.057 #cm
   hole_diameter: 170 #GEM hole diameter in um
   hole_pitch: 280 #GEM hole pitch in um
-  transfer_gap: 0.2 #length of transfer gap cm
-  induction_gap: 0.2 #length of induction gap cm
-  min_drift_length: 1 #cm.  Drift lengths are computed using a random uniform dist. between the min and max drift lengths specified here
-  max_drift_length: 2.5 #cm
-  GEM2_offsetx: 0 #x coordinate offset of second GEM hole pattern to first in um
-  GEM2_offsety: 0 #y coordinate offset of second GEM hole pattern to first in um
+  transfer_gap_length: 0.2 #Length of transfer gap in cm
+  extra_GEM_diffusion: 0.01425 #Currently set to GEM thickness / 4. This is extra smearing post avalanche
+  induction_gap_length: 0.2 #length of induction gap cm
+  min_drift_length: 2.5 #cm.  Drift lengths are computed using a random uniform dist. between the min and max drift lengths specified here
+  max_drift_length: 2.5 #cm...originally 2.5 increased for longer ERs
+  ### GEM offsets are listed as a list. Length of this list should match nGEM. If not entered as a list, offsets for all GEMs will default to being 0
+  GEM_offsetsx: [0,210,0,210] #list of GEM offsets in x. List entries be entered as intengers or floats. For 3 GEMs w/ 280um pitch [0,0,0] is max aligned and [0,210,0] is max misaligned, where max misalign in x is 3*pitch/4.
+  GEM_offsetsy: [0,121.244,0,121.244] #list of GEM offsets in y. Offsets are relative to the first GEM, so [0,121.244,0] means GEM 1 and 3 are aligned with eachother but GEM 2 is maximally misaligned (GEM_pitch/2 * sqrt(3)/2)
 
 Sim_settings:
   randomize_primary_track_order: true #Randomizes order of tracks when generating primary tracks, generally a good idea to set this to True
-  rotate_tracks: true #Set to True if you want to rotate the primary tracks so they are isotropic. Otherwise primary tracks are (1,0,0)
+  rotate_tracks: true #Only relevant when generating primary tracks. Set to True if you want to rotate the primary tracks so they are isotropic. Otherwise primary tracks are (1,0,0)
+  randomize_position: false #Relevant for digitization: Set to True to randomize the (x,y) position of primary tracks. Otherwise primary tracks are in the center of the readout (1024,576)
   parallel: true #Splits the degrad task into N chunks and concatenates the output. ONLY APPLIES TO DEGRAD PRIMARY TRACK SIM
-  parallel_chunks: 1     #only relevant if parallel is set to True. Must be <= n_tracks. n_tracks // parallel_chunks = 500 or 1000 performs well
-  
-  ###Below are intended for process_primary_tracks{_batch}.py but are also
-  ###relevant for run_and_process_degrad.py
-
-  digitization_input_file: primary_tracks/big_migs.feather #set the input file for process_primary_tracks.py 
+  parallel_chunks: 1000     #only relevant if parallel is set to True. Must be <= n_tracks. n_tracks // parallel_chunks = 500 or 1000 performs well
+  ###Below are intended for process_primary_tracks{_batch}.py
+  digitization_input_file: /home/jeff/workspace/MIGDAL_simulator/RCTRIM/data/F_maxE466.233_486primaryTracks.feather #set the input file for process_primary_tracks.py 
   apply_drift: true #If True drift tracks
   apply_amplification: true #If true, simulate GEMs and amplify
-  gpu: True #If true, try to process on gpu. If False, don't. Only implemented for process_primary_tracks.py
+  gpu: False #If true, try to process on gpu. If False, don't. Only implemented for process_primary_tracks.py
   digitize: true #If true, simulate readout
   write_gain: false #If True, write out amplified charges (TAKES LOTS OF DISK SPACE)
   overwrite_output: false #If True, when processing a primary tracks file, it writes out the processed information to the same file. Otherwise it will write a separate file
@@ -49,11 +50,13 @@ Sim_settings:
 
 RCTRIM_settings: #RCTRIM requires a basedir that contains the subdirs 'C' and 'F' and nothing else
   SRIM_output_dir: /home/jeff/srim/SRIM Outputs/ #YOURS WILL BE DIFFERENT: This is the directory where your raw SRIM output is written to
-  recoil_species_generated: F #needs to be C or F. MAKE SURE TO SPECIFY THIS FOR EACH CAMPAIGN!
-  base_dir: NRs_campaign1/ #Make sure you use a new base_dir if you don't want to overwrite SRIM output files
-  C_recoil_dir: NRs_campaign1/C #Always needs to be <base_dir_name>/C
-  F_recoil_dir: NRs_campaign1/F #Same as above
-  N_recoils: 2000 #Number of primary tracks to generate. THIS CAN BE LARGER THAN THE NUMBER OF EVENTS YOU SIMULATED IN SRIM/TRIM
+  recoil_species_generated: H #needs to be C or F...or maybe H if H works MAKE SURE TO SPECIFY THIS FOR EACH CAMPAIGN!
+  base_dir: NRs_campaign2/ #Make sure you use a new base_dir if you don't want to overwrite SRIM output files
+  C_recoil_dir: NRs_campaign2/C #Always needs to be <base_dir_name>/C
+  F_recoil_dir: NRs_campaign2/F #Same as above
+  H_recoil_dir: NRs_campaign2/H
+  proton_energy: 400 #keV
+  N_recoils: 500 #Number of primary tracks to generate. THIS CAN BE LARGER THAN THE NUMBER OF EVENTS YOU SIMULATED IN SRIM/TRIM
   output_dir: data/ #outputh directory for generated primary tracks
 
 Migdal_sim: #Settings for combining ER and NR tracks for forming Migdals
