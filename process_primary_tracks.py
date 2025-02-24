@@ -9,14 +9,15 @@ from scipy.spatial import KDTree #Determines if charge passes through GEM holes 
 
 class process_tracks:
     def __init__(self,infile,outpath,nGEM,drift,min_drift_length,max_drift_length,v_drift,sigmaT,
-                 sigmaL, sigmaT_trans,sigmaL_trans, sigmaT_induc,sigmaL_induc, GEM_width,
-                 GEM_height, GEM_thickness, hole_diameter, hole_pitch, extra_GEM_diffusion, amplify,gain,
+                 sigmaL, sigmaT_trans,sigmaL_trans, sigmaT_induc,sigmaL_induc, drift_gap_length,
+                 GEM_width, GEM_height, GEM_thickness, hole_diameter, hole_pitch, extra_GEM_diffusion, amplify,gain,
                  transfer_gap_length, induction_gap_length, GEM_offsetsx, GEM_offsetsy,
                  randomize_position, write_gain = False, overwrite = False, use_gpu = False):
 
         self.gpu = use_gpu
         self.nGEM = int(nGEM)
         self.gain=gain**(1/self.nGEM) #scale of random exponential for amplification.
+        self.drift_gap_length = drift_gap_length
         self.randomize_position = randomize_position
         self.v_drift = v_drift
         self.sigmaT = sigmaT
@@ -31,7 +32,7 @@ class process_tracks:
         
         print(infile)
 
-        self.data = pd.read_feather(infile)[:10]
+        self.data = pd.read_feather(infile)[:40]
         if 'ID' in self.data.columns: #autocheck if the event is a Migdal
             self.migdal = True
         else:
@@ -44,20 +45,25 @@ class process_tracks:
         else:
             self.data['xshift'] = 0
             self.data['yshift'] = 0
-            
-        '''Apply drift if specified'''
-        if drift:
-            #self.data['z'] = self.data['z'].apply(lambda x: x-x.min())
-            #deltaz = self.data['z'].apply(lambda x: x.max()-x.min())
-            #self.data['drift_length'] = [np.random.uniform(deltaz.iloc[i],deltaz.iloc[i]+3) for i in range(0,len(deltaz))] #cm
-            #self.data['z'] = self.data['drift_length']+self.data['z']
-            self.data['drift_length'] = np.random.uniform(min_drift_length,max_drift_length,len(self.data)) #cm
-            
-            self.data['x'] = self.data['x'] + self.data['xshift']
-            self.data['y'] = self.data['y'] + self.data['yshift']
-            self.data['z'] = self.data['z'].apply(lambda x: x-x.min())
-            self.data['z'] = self.data['drift_length']+self.data['z']
-            '''Apply diffusion'''
+
+        self.data['x'] = self.data['x'] + self.data['xshift']
+        self.data['y'] = self.data['y'] + self.data['yshift']
+
+        '''Fiducialize in z. We'll put the z-vertex at 0 and then add a drift length to this to figure out the primary track z position'''
+        self.data['z'] = self.data['z'].apply(lambda x: x-x[0])
+        self.data['drift_length'] = np.random.uniform(min_drift_length,max_drift_length,len(self.data)) #cm
+        self.data['z'] = self.data['drift_length']+self.data['z']
+
+        #Now let's fiducialize by removing all coordinates with z < 0 and z > drift_gap. We will add flags for whether the track hits the GEM or the cathode
+        self.data['GEM_clipped'] = self.data['z'].apply(lambda x: 1 if len(np.where(x<0)[0]) > 0 else 0)
+        self.data['Cathode_clipped'] = self.data['z'].apply(lambda x: 1 if len(np.where(x>self.drift_gap_length)[0]) > 0 else 0)
+        self.data['fiducial_indices'] = self.data['z'].apply(lambda x: np.where((x >= 0) & (x <= self.drift_gap_length))[0])
+        #remove nonfiducial coordinates
+        for col in ['x','y','z']:
+            self.data[col] = self.data.apply(lambda x: x[col][x['fiducial_indices']], axis=1)
+        
+        '''Apply drift+diffusion if specified'''
+        if drift:            
             xdiff = []
             ydiff = []
             zdiff = []
@@ -382,6 +388,7 @@ if __name__ == '__main__':
     sigmaL_trans = gas_cfg['sigmaL_trans']
     sigmaT_induc = gas_cfg['sigmaT_induc']
     sigmaL_induc = gas_cfg['sigmaL_induc']
+    drift_gap_length = tpc_cfg['drift_gap_length']
     GEM_width = tpc_cfg['GEM_width']
     GEM_height = tpc_cfg['GEM_height']
     GEM_thickness = tpc_cfg['GEM_thickness']
@@ -416,6 +423,7 @@ if __name__ == '__main__':
                    sigmaL_trans = sigmaL_trans,
                    sigmaT_induc = sigmaT_induc,
                    sigmaL_induc = sigmaL_induc,
+                   drift_gap_length = drift_gap_length,
                    GEM_width=GEM_width,
                    GEM_height=GEM_height,
                    GEM_thickness = GEM_thickness,
