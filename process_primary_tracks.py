@@ -32,7 +32,7 @@ class process_tracks:
         
         print(infile)
 
-        self.data = pd.read_feather(infile)[:40]
+        self.data = pd.read_feather(infile)
         if 'ID' in self.data.columns: #autocheck if the event is a Migdal
             self.migdal = True
         else:
