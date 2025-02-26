@@ -18,8 +18,8 @@ Gas_props: #Gas properties
 TPC_sim: #Detector simulation.
   nGEM: 2 #Number of GEMs. Code now supports any number
   gain: 2000 #Total gain across all GEMs. Computed in simulation as gain**(1/nGEM)
-  GEM_width: 10 #cm
-  GEM_height: 10 #cm
+  GEM_width: 20 #cm
+  GEM_height: 20 #cm
   GEM_thickness: 0.057 #cm
   hole_diameter: 170 #GEM hole diameter in um
   hole_pitch: 280 #GEM hole pitch in um
@@ -30,9 +30,15 @@ TPC_sim: #Detector simulation.
   induction_gap_length: 0.2 #length of induction gap cm
   min_drift_length: 0 #cm.  Drift lengths are computed using a random uniform dist. between the min and max drift lengths specified here
   max_drift_length: 3 #cm...originally 2.5 increased for longer ERs
+  
   ### GEM offsets are listed as a list. Length of this list should match nGEM. If not entered as a list, offsets for all GEMs will default to being 0
   GEM_offsetsx: [0,140,0,140] #list of GEM hole offsets in x (in um). List entries be entered as intengers or floats. For 3 GEMs w/ 280um pitch [0,0,0] is max aligned and [0,140,0] is max misaligned, where max misalign in x is pitch/2.
   GEM_offsetsy: [0,80.829,0,80.829] #list of GEM offsets in y. Offsets are relative to the first GEM, so [0,80.829,0] means GEM 1 and 3 are aligned with eachother but GEM 2 is maximally misaligned, where max misalign in y is sqrt(3)*pitch/6. With the x offset, this puts the second GEM hole in the middle of the equilateral triangle formed by three of the first GEM's holes.
+
+  cam_bins_x: 4096 #2048 is standard for ORCA quest
+  cam_bins_y: 4096 # 1152 is standard for ORCA quest
+  cam_width: 16 #cm. ORCA Quest is 8cm
+  cam_height: 16 #cm. ORCA Quest is 4.5cm
 
 Sim_settings:
   randomize_primary_track_order: true #Randomizes order of tracks when generating primary tracks, generally a good idea to set this to True
@@ -41,7 +47,7 @@ Sim_settings:
   parallel: true #Splits the degrad task into N chunks and concatenates the output. ONLY APPLIES TO DEGRAD PRIMARY TRACK SIM
   parallel_chunks: 1000     #only relevant if parallel is set to True. Must be <= n_tracks. n_tracks // parallel_chunks = 500 or 1000 performs well
   ###Below are intended for process_primary_tracks{_batch}.py
-  digitization_input_file: /home/jeff/workspace/MIGDAL_simulator/RCTRIM/data/H_maxE400.0_100primaryTracks.feather #set the input file for process_primary_tracks.py 
+  digitization_input_file: RCTRIM/data/H_maxE600.0_500primaryTracks.feather #set the input file for process_primary_tracks.py 
   apply_drift: true #If True drift tracks
   apply_amplification: true #If true, simulate GEMs and amplify
   gpu: False #If true, try to process on gpu. If False, don't. Only implemented for process_primary_tracks.py
