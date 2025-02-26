@@ -12,12 +12,18 @@ class process_tracks:
                  sigmaL, sigmaT_trans,sigmaL_trans, sigmaT_induc,sigmaL_induc, drift_gap_length,
                  GEM_width, GEM_height, GEM_thickness, hole_diameter, hole_pitch, extra_GEM_diffusion, amplify,gain,
                  transfer_gap_length, induction_gap_length, GEM_offsetsx, GEM_offsetsy,
-                 randomize_position, write_gain = False, overwrite = False, use_gpu = False):
+                 randomize_position, cam_bins_x=2048, cam_bins_y=1152, cam_width=8, cam_height=4.5, write_gain = False, overwrite = False, use_gpu = False):
 
         self.gpu = use_gpu
         self.nGEM = int(nGEM)
         self.gain=gain**(1/self.nGEM) #scale of random exponential for amplification.
         self.drift_gap_length = drift_gap_length
+
+        self.cam_bins_x = cam_bins_x
+        self.cam_bins_y = cam_bins_y
+        self.cam_width = cam_width
+        self.cam_height = cam_height
+        
         self.randomize_position = randomize_position
         self.v_drift = v_drift
         self.sigmaT = sigmaT
@@ -38,10 +44,10 @@ class process_tracks:
         else:
             self.migdal = False
 
-        '''Randomize position if specified'''
+        '''Randomize xy position if specified'''
         if self.randomize_position:
-            self.data['xshift'] = np.random.uniform(-4,4,len(self.data))
-            self.data['yshift'] = np.random.uniform(-2.25,2.25,len(self.data))
+            self.data['xshift'] = np.random.uniform(-self.cam_width/2,self.cam_width/2,len(self.data))
+            self.data['yshift'] = np.random.uniform(-self.cam_height/2,self.cam_height/2,len(self.data))
         else:
             self.data['xshift'] = 0
             self.data['yshift'] = 0
@@ -49,8 +55,8 @@ class process_tracks:
         self.data['x'] = self.data['x'] + self.data['xshift']
         self.data['y'] = self.data['y'] + self.data['yshift']
 
-        '''Fiducialize in z. We'll put the z-vertex at 0 and then add a drift length to this to figure out the primary track z position'''
-        self.data['z'] = self.data['z'].apply(lambda x: x-x[0])
+        '''Fiducialize in z. We'll put the mean of the track at 0 and then add a drift length to this to figure out the primary track z position'''
+        self.data['z'] = self.data['z'].apply(lambda x: x-x.mean())
         self.data['drift_length'] = np.random.uniform(min_drift_length,max_drift_length,len(self.data)) #cm
         self.data['z'] = self.data['drift_length']+self.data['z']
 
@@ -325,8 +331,8 @@ class process_tracks:
     def digitize_camera_migdal(self,x,y,ID):
         NRidx = np.where(ID == 1)[0]
         ERidx = np.where(ID == 0)[0]
-        NRhist = np.histogram2d(x[NRidx],y[NRidx],bins=(2048,1152),range=((-4,4),(-2.25,2.25)))[0].T
-        ERhist = np.histogram2d(x[ERidx],y[ERidx],bins=(2048,1152),range=((-4,4),(-2.25,2.25)))[0].T
+        NRhist = np.histogram2d(x[NRidx],y[NRidx],bins=(self.cam_bins_x,self.cam_bins_y),range=((-self.cam_width/2,self.cam_width/2),(-self.cam_height/2,self.cam_height/2)))[0].T
+        ERhist = np.histogram2d(x[ERidx],y[ERidx],bins=(self.cam_bins_x,self.cam_bins_y),range=((-self.cam_width/2,self.cam_width/2),(-self.cam_height/2,self.cam_height/2)))[0].T
         totalhist = NRhist + ERhist
         fraction = np.divide(ERhist, totalhist, out=np.zeros_like(ERhist, dtype=float), where=totalhist != 0)
         sparse_hist = np.where(totalhist > 0)
@@ -336,7 +342,7 @@ class process_tracks:
         return x,y,q,frac
     
     def digitize_camera(self,x,y):
-        a = np.histogram2d(x,y,bins=(2048,1152),range=((-4,4),(-2.25,2.25)))[0].T
+        a = np.histogram2d(x,y,bins=(self.cam_bins_x,self.cam_bins_y),range=((-self.cam_width/2,self.cam_width/2),(-self.cam_height/2,self.cam_height/2)))[0].T
         sparse_hist = np.where(a > 0)
         y,x = sparse_hist
         q = a[sparse_hist]
@@ -399,6 +405,12 @@ if __name__ == '__main__':
     GEM_offsetsx = tpc_cfg['GEM_offsetsx']
     GEM_offsetsy = tpc_cfg['GEM_offsetsy']
     extra_GEM_diffusion = tpc_cfg['extra_GEM_diffusion']
+
+    cam_bins_x = tpc_cfg['cam_bins_x']
+    cam_bins_y = tpc_cfg['cam_bins_y']
+    cam_width = tpc_cfg['cam_width']
+    cam_height = tpc_cfg['cam_height']
+        
     amplify = settings['apply_amplification']
     gain = tpc_cfg['gain']
     randomize_position = settings['randomize_position']
@@ -434,6 +446,10 @@ if __name__ == '__main__':
                    GEM_offsetsx = GEM_offsetsx,
                    GEM_offsetsy = GEM_offsetsy,
                    extra_GEM_diffusion = extra_GEM_diffusion,
+                   cam_bins_x = cam_bins_x,
+                   cam_bins_y = cam_bins_y,
+                   cam_width = cam_width,
+                   cam_height = cam_height,
                    randomize_position = randomize_position,
                    amplify=amplify,
                    write_gain=write_gain,
