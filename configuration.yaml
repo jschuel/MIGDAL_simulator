@@ -1,8 +1,10 @@
-Degrad_card: #Settings for simulating ERs in degrad
-  input_file: input.card   #Name of input card file. run_and_process_degrad.py adjusts the parameters below in the card file
-  n_tracks: 10000     #Number of ERs to simulate
-  seed: 42 #Use what you want here
-  energy: 20000 #4950 #In eV
+Degrad_settings: #Settings for simulating ERs in degrad
+  input_file: input_test.card   #Name of input card file. run_and_process_degrad.py adjusts the parameters below in the card file
+  n_tracks: 1000     #Number of ERs to simulate
+  seed: 42 #Random seed. Needs to be different each time DEGRAD is run...this is handled automatically when parallel is set to True.
+  parallel: true #Splits the degrad task into # chunks defined below and concatenates the output. ONLY APPLIES TO DEGRAD PRIMARY TRACK SIM
+  parallel_chunks: 100 #only relevant if parallel is set to True. Must be <= n_tracks. n_tracks // parallel_chunks = 500 or 1000 performs well
+  energy: 5900 #In eV. 
   primary_track_output_dir: primary_tracks/ #Degrad primary track output directory
 
 Gas_props: #Gas properties
@@ -18,8 +20,8 @@ Gas_props: #Gas properties
 TPC_sim: #Detector simulation.
   nGEM: 2 #Number of GEMs. Code now supports any number
   gain: 2000 #Total gain across all GEMs. Computed in simulation as gain**(1/nGEM)
-  GEM_width: 20 #cm
-  GEM_height: 20 #cm
+  GEM_width: 10 #cm
+  GEM_height: 10 #cm
   GEM_thickness: 0.057 #cm
   hole_diameter: 170 #GEM hole diameter in um
   hole_pitch: 280 #GEM hole pitch in um
@@ -28,30 +30,30 @@ TPC_sim: #Detector simulation.
   extra_GEM_diffusion: 0.01425 #Currently set to GEM thickness / 4. This is extra smearing post avalanche
   #extra_GEM_diffusion: 0 #Currently set to GEM thickness / 4. This is extra smearing post avalanche
   induction_gap_length: 0.2 #length of induction gap cm
-  min_drift_length: 0 #cm.  Drift lengths are computed using a random uniform dist. between the min and max drift lengths specified here
-  max_drift_length: 3 #cm...originally 2.5 increased for longer ERs
+  min_drift_length: 0.5 #cm.  Drift lengths are computed using a random uniform dist. between the min and max drift lengths specified here
+  max_drift_length: 2.5 #cm...originally 2.5 increased for longer ERs
   
   ### GEM offsets are listed as a list. Length of this list should match nGEM. If not entered as a list, offsets for all GEMs will default to being 0
-  GEM_offsetsx: [0,140,0,140] #list of GEM hole offsets in x (in um). List entries be entered as intengers or floats. For 3 GEMs w/ 280um pitch [0,0,0] is max aligned and [0,140,0] is max misaligned, where max misalign in x is pitch/2.
-  GEM_offsetsy: [0,80.829,0,80.829] #list of GEM offsets in y. Offsets are relative to the first GEM, so [0,80.829,0] means GEM 1 and 3 are aligned with eachother but GEM 2 is maximally misaligned, where max misalign in y is sqrt(3)*pitch/6. With the x offset, this puts the second GEM hole in the middle of the equilateral triangle formed by three of the first GEM's holes.
+  GEM_offsetsx: [0,0,0,0] #list of GEM hole offsets in x (in um). List entries be entered as intengers or floats. For 3 GEMs w/ 280um pitch [0,0,0] is max aligned and [0,140,0] is max misaligned, where max misalign in x is pitch/2.
+  GEM_offsetsy: [0,0,0,0] #list of GEM offsets in y. Offsets are relative to the first GEM, so [0,80.829,0] means GEM 1 and 3 are aligned with eachother but GEM 2 is maximally misaligned, where max misalign in y is sqrt(3)*pitch/6. With the x offset, this puts the second GEM hole in the middle of the equilateral triangle formed by three of the first GEM's holes.
 
-  cam_bins_x: 4096 #2048 is standard for ORCA quest
-  cam_bins_y: 4096 # 1152 is standard for ORCA quest
-  cam_width: 16 #cm. ORCA Quest is 8cm
-  cam_height: 16 #cm. ORCA Quest is 4.5cm
+  cam_bins_x: 2048 #2048 is standard for ORCA quest
+  cam_bins_y: 1152 # 1152 is standard for ORCA quest
+  cam_width: 8 #cm. ORCA Quest is 8cm
+  cam_height: 4.5 #cm. ORCA Quest is 4.5cm
 
 Sim_settings:
   randomize_primary_track_order: true #Randomizes order of tracks when generating primary tracks, generally a good idea to set this to True
   rotate_tracks: true #Only relevant when generating primary tracks. Set to True if you want to rotate the primary tracks so they are isotropic. Otherwise primary tracks are (1,0,0)
-  randomize_position: false #Relevant for digitization: Set to True to randomize the (x,y) position of primary tracks. Otherwise primary tracks are in the center of the readout (1024,576)
-  parallel: true #Splits the degrad task into N chunks and concatenates the output. ONLY APPLIES TO DEGRAD PRIMARY TRACK SIM
-  parallel_chunks: 1000     #only relevant if parallel is set to True. Must be <= n_tracks. n_tracks // parallel_chunks = 500 or 1000 performs well
+  randomize_position: true #Relevant for digitization: Set to True to randomize the (x,y) position of primary tracks. Otherwise primary tracks are in the center of the readout (1024,576)
+
   ###Below are intended for process_primary_tracks{_batch}.py
-  digitization_input_file: RCTRIM/data/H_maxE600.0_500primaryTracks.feather #set the input file for process_primary_tracks.py 
+  digitization_input_file: primary_tracks/5.9keV_1000Events_all.feather #set the input file for process_primary_tracks.py 
   apply_drift: true #If True drift tracks
   apply_amplification: true #If true, simulate GEMs and amplify
-  gpu: False #If true, try to process on gpu. If False, don't. Only implemented for process_primary_tracks.py
+  gpu: False #If true, try to process on gpu. If False, don't. Keep false if you're running on a machine without a discrete GPU.
   digitize: true #If true, simulate readout
+  write_ITO: false #ITO simulation is crude so in general recommend setting to false
   write_gain: false #If True, write out amplified charges (TAKES LOTS OF DISK SPACE)
   overwrite_output: false #If True, when processing a primary tracks file, it writes out the processed information to the same file. Otherwise it will write a separate file
   output_dir: processed/ #Directory for MIGDAL processed output file. ONLY RELEVANT IF overwrite_output IS FALSE
