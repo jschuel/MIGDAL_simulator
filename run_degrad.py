@@ -17,7 +17,7 @@ class run_degrad:
         self.num_events = num_events
         self.seed = random_seed
         self.truth_dir = truth_dir
-        self.energy = format(energy, '.5f')
+        self.energy = format(energy, '.1f')
         self.W = W
         self.outfile_name = '%s_events_%skeV_%s_seed.out'%(self.num_events,float(self.energy)/1000,self.seed)
         '''Modify num_events, random_seed, and energy in CARD file'''
@@ -67,8 +67,9 @@ class run_degrad:
             lines = file.readlines()
 
         # Modify the specific numbers in the first line
-        lines[0] = '        1      %s         2         0         %s    %s    2.0000    0.0000\n'%(self.num_events,self.seed,self.energy)
-    
+        #lines[0] = '        1      %s         2         1         %s    %s    2.0000    0.0000\n'%(self.num_events,self.seed,self.energy)
+        lines[0] = '1,%s,2,0,%s,%s,2.0,0.0,\n'%(self.num_events,self.seed,self.energy)
+        
         # Write the modified content to the output file
         with open(self.card_file, 'w') as file:
             file.writelines(lines)
@@ -77,7 +78,7 @@ class run_degrad:
         # Run the Fortran executable
         with open(self.card_file, 'r') as infile:
             with open(os.devnull,'w') as devnull:
-                subprocess.run(['./degrad'],stdin=infile,stdout=devnull,stderr=devnull)
+                subprocess.run(['./degrad-319'],stdin=infile,stdout=devnull,stderr=devnull)
 
         # Rename the output file
         subprocess.run(['mv', 'DEGRAD.OUT', self.outfile_name])
@@ -217,7 +218,7 @@ if __name__ == '__main__':
     '''Load configuration.yaml'''
     with open('configuration.yaml','r') as cfg:
         config = yaml.safe_load(cfg)
-        degrad_cfg = config['Degrad_card']
+        degrad_cfg = config['Degrad_settings']
         settings = config['Sim_settings']
         gas_cfg = config['Gas_props']
         tpc_cfg = config['TPC_sim']
@@ -228,8 +229,8 @@ if __name__ == '__main__':
     seed = degrad_cfg['seed']
     E = degrad_cfg['energy']
     rot = settings['rotate_tracks']
-    parallel = settings['parallel']
-    nchunks = settings['parallel_chunks']
+    parallel = degrad_cfg['parallel']
+    nchunks = degrad_cfg['parallel_chunks']
     W = gas_cfg['W']
     random_order = settings['randomize_primary_track_order']
     
