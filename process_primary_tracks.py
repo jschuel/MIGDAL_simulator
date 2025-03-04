@@ -12,7 +12,7 @@ class process_tracks:
                  sigmaL, sigmaT_trans,sigmaL_trans, sigmaT_induc,sigmaL_induc, drift_gap_length,
                  GEM_width, GEM_height, GEM_thickness, hole_diameter, hole_pitch, extra_GEM_diffusion, amplify,gain,
                  transfer_gap_length, induction_gap_length, GEM_offsetsx, GEM_offsetsy,
-                 randomize_position, cam_bins_x=2048, cam_bins_y=1152, cam_width=8, cam_height=4.5, write_gain = False, overwrite = False, use_gpu = False):
+                 randomize_position, write_ITO, cam_bins_x=2048, cam_bins_y=1152, cam_width=8, cam_height=4.5, write_gain = False, overwrite = False, use_gpu = False):
 
         self.gpu = use_gpu
         self.nGEM = int(nGEM)
@@ -23,6 +23,8 @@ class process_tracks:
         self.cam_bins_y = cam_bins_y
         self.cam_width = cam_width
         self.cam_height = cam_height
+
+        self.write_ITO = write_ITO
         
         self.randomize_position = randomize_position
         self.v_drift = v_drift
@@ -163,12 +165,14 @@ class process_tracks:
             # Convert the camera charge to an unsigned 16-bit integer array.
             self.data['qcam'] = [np.array(q).astype('uint16') for q in qcam]
 
-            self.data['xITO'] = xITO
-            self.data['zITO'] = zITO
-            self.data['qITO'] = qITO
+            if self.write_ITO:
+                self.data['xITO'] = xITO
+                self.data['zITO'] = zITO
+                self.data['qITO'] = qITO
             if self.migdal:
                 self.data['ER_frac_cam'] = fraccam
-                self.data['ER_frac_ITO'] = fracITO
+                if self.write_ITO:
+                    self.data['ER_frac_ITO'] = fracITO
 
         '''Save output dataframe'''
         if overwrite:
@@ -375,7 +379,6 @@ if __name__ == '__main__':
     '''Load configuration.yaml'''
     with open('configuration.yaml','r') as cfg:
         config = yaml.safe_load(cfg)
-        degrad_cfg = config['Degrad_card']
         settings = config['Sim_settings']
         gas_cfg = config['Gas_props']
         tpc_cfg = config['TPC_sim']
@@ -415,6 +418,7 @@ if __name__ == '__main__':
     gain = tpc_cfg['gain']
     randomize_position = settings['randomize_position']
     write_gain = settings['write_gain']
+    write_ITO = settings['write_ITO']
     overwrite = settings['overwrite_output']
     outpath = settings['output_dir']
     gpu = settings['gpu']
@@ -453,6 +457,7 @@ if __name__ == '__main__':
                    randomize_position = randomize_position,
                    amplify=amplify,
                    write_gain=write_gain,
+                   write_ITO=write_ITO,
                    gain=gain,
                    overwrite=overwrite,
                    use_gpu = gpu)
