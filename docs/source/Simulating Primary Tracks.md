@@ -13,9 +13,7 @@ If you have not yet compiled Degrad on your machine, please work through the [Ge
 
 Nearly all of MIGDAL_Simulator's functionality is configurable with `configuration.yaml`. Currently, `configuration.yaml` only supports simulating ERs in 50 Torr CF4 gas. We hope to update this soon.
 
-Below are the `configuration.yaml` parameters specifically relevant to primary ER track generation:
-
-1. Under the `Degrad_card` heading:
+Below are the `configuration.yaml` parameters specifically relevant to primary ER track generation. Unless otherwise noted, these parameters are found under the `Degrad_settings` heading:
 
 - **input_file** - The filepath of Degrad's input card file. The `input.card` default values don't need to be manually adjusted
 
@@ -27,11 +25,9 @@ Below are the `configuration.yaml` parameters specifically relevant to primary E
 
 - **primary_track_output_dir** - directory you want Degrad primary tracks output file to be saved to
 
-2. Under the `Sim_settings` heading:
+- **randomize_primary_track_order** (under the `Sim_settings1 header) - If True, this will shuffle the order of produced tracks. This does not have any effects on the tracks themselves, just where they show up in the output dataframe.
 
-- **randomize_primary_track_order** - If True, this will shuffle the order of produced tracks. This does not have any effects on the tracks themselves, just where they show up in the output dataframe.
-
-- **rotate_tracks** - If true, this "isotropizes" the angular distribution of primary tracks. If false, all tracks will point in the +x direction
+- **rotate_tracks ** (under the `Sim_settings1 header) - If true, this "isotropizes" the angular distribution of primary tracks. If false, all tracks will point in the +x direction
 
 - **parallel** - Setting this to True splits the Degrad processing into chunks and then concatenates the output. For instance if we're generating 5000 electrons and we set parallel to True and then parallel chunks (below) to 500. This will run 500 instances (each with different pseudorandom seeds) each generating 10 ERs. The 500 output file-chunks will then be concatenated into a single file and the file-chunks will then be deleted.
 
@@ -79,11 +75,6 @@ combined.index = [i for i in range(0,len(combined))] #reset the indices
 #save
 combined.to_feather("combined_output.feather") #chage to whatever name you want
 ```
-
-### Script 3: run_and_process_degrad.py (**not recommended**)
-
-This script creates primary tracks and performs the entire MIGDAL detector simulation for these tracks in a single swoop. While this can be useful, I prefer the modular approach of producing primary tracks and then feeding those into the MIGDAL simulation script. If you do run this script, read the description of `configuration.yaml` parameters in the [MIGDAL Detector Simulation](https://migdal-simulator.readthedocs.io/en/latest/MIGDAL%20Detector%20Simulation.html) section of these documents to understand the relevant parameters to tweak.
-
 ## Simulating NRs with SRIM
 **Note:** RCTRIM is required to generate primary NR track output files
 Here we will walk through the steps of simulating NRs using SRIM/TRIM. The examples we use are relevant for generating simulation for the MIGDAL experiment which produces nuclear recoils from DD-generator neutrons. Assuming a monoenergetic source of ~2.5 MeV neutrons, the peak Fluorine and Carbon recoil energies from elastic scattering are around 468 keV and 699 keV, respectively.
