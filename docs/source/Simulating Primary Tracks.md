@@ -25,9 +25,9 @@ Below are the `configuration.yaml` parameters specifically relevant to primary E
 
 - **primary_track_output_dir** - directory you want Degrad primary tracks output file to be saved to
 
-- **randomize_primary_track_order** (under the `Sim_settings1 header) - If True, this will shuffle the order of produced tracks. This does not have any effects on the tracks themselves, just where they show up in the output dataframe.
+- **randomize_primary_track_order** (under the `Sim_settings` header) - If True, this will shuffle the order of produced tracks. This does not have any effects on the tracks themselves, just where they show up in the output dataframe.
 
-- **rotate_tracks ** (under the `Sim_settings1 header) - If true, this "isotropizes" the angular distribution of primary tracks. If false, all tracks will point in the +x direction
+- **rotate_tracks** (under the `Sim_settings` header) - If true, this "isotropizes" the angular distribution of primary tracks. If false, all tracks will point in the +x direction
 
 - **parallel** - Setting this to True splits the Degrad processing into chunks and then concatenates the output. For instance if we're generating 5000 electrons and we set parallel to True and then parallel chunks (below) to 500. This will run 500 instances (each with different pseudorandom seeds) each generating 10 ERs. The 500 output file-chunks will then be concatenated into a single file and the file-chunks will then be deleted.
 
