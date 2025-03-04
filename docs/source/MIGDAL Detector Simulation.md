@@ -10,13 +10,11 @@ The previous section detailed step (1), this section details step (2). In partic
 
 ## Relevant configuration.yaml parameters
 
-1. Under the `Gas_props` heading:
+1. Under the `Gas_props` heading, there are several configurable diffusion parameters. The default values (those present in the main branch of the MIGDAL_simulator git repository) of these parameters were computed with Magboltz and assume 50 Torr CF4 gas with drift fields of 200V/cm, transfer gap fields of 600V/cm, and induction gap fields of 400 V/cm:
 
 - **vd** - drift speed of ionization in the the drift volume. **This setting isn't explicitly used in the simulation at this time**
 
 - **W** - Work function of the gas in eV. This is used to compute the ionization energy of primary tracks
-
-**Diffusion parameters are below. The default values (those present in the main branch of the MIGDAL_simulator git repository) of these parameters were compute with Magboltz and assume 50 Torr CF4 gas with drift fields of 200V/cm, transfer gap fields of 600V/cm, and induction gap fields of 400 V/cm**
 
 - **sigmaT** - Transverse diffusion coefficient (in um/sqrt(cm)) in the drift volume
 
@@ -32,7 +30,9 @@ The previous section detailed step (1), this section details step (2). In partic
 
 2. Under the `TPC_sim` heading:
 
-- **gain** - Double GEM gain. We plan to eventually make the gain through each individual GEM configurable
+- **nGEM** - Number of GEMs to simulate. Any number of GEMs is now supported, however, the current version of this software only supports a single value for `sigmaT_trans` and `sigmaL_trans` that is applied to all GEMs. Similarly the value set for `transfer_gap_length` is the same for each transfer gap if `nGEM` > 2. 
+
+- **gain** - Gain amplification factor across all GEMs. This is computed as gain**(1/nGEM). Note that the *effective* gain will be significantly less than the value set for `gain` because of losses between GEM holes.
 
 - **GEM_width** - Width of the GEM (x) in cm
 
@@ -48,19 +48,33 @@ The previous section detailed step (1), this section details step (2). In partic
 
 Currently MIGDAL_simulator only suports GEMs with honeycomb-patterns of holes
 
-- **GEM2_offsetx** - x-coordinate offset of GEM2's holes w.r.t GEM1 in um. A value of 0 means GEM 2's holes are perfectly aligned to GEM1. A value of hole_pitch/2 means the holes are maximally misaligned.
+- **drift_gap_length** - Length of the drift region in cm
 
-- **GEM2_offsety** - Same as above except it's the y-coordinate instead of x-coordinate.
+- **transfer_gap_length** - Length of all transfer gaps in cm
 
-- **transfer_gap** - Length of the transfer gap (gap between GEM 1 and GEM 2) in cm
+- **induction_gap_length** - Relevant when simulating ITO output. This is the length of the gap between the last GEM and the anode in cm.
 
-- **induction_gap** - Length of the induction gap (gap between GEM2 and the ITO anode) in cm
+- **extra_GEM_diffusion** - Additional smearing after each GEM to produce track images that look more similar to real data. The default setting of 0.01425 corresponds to the default GEM_thickness / 4.
 
-- **min_drift_length** - Minimum length to drift and diffuse a track through the drift gap. **Track drift is simulated as a random uniform distribution between the minimum and maximum specified drift lengths**
+- **min_drift_length** - Minimum length (cm) to drift and diffuse a track through the drift gap. **Track drift is simulated as a random uniform distribution between the minimum and maximum specified drift lengths**
 
-- **max_drift_length** - Maximum length to drift and diffuse a track through the drift gap
+- **max_drift_length** - Maximum length (cm) to drift and diffuse a track through the drift gap
+
+- **GEM_offsetsx** - List of GEM hole offsets in x (in um). List entries be entered as intengers or floats. For 3 GEMs w/ 280um pitch [0,0,0] is max aligned and [0,140,0] is max misaligned, where maximum misalignment in x is GEM_pitch/2
+
+- **GEM_offsetsy** - List of GEM offsets in y. Offsets are relative to the first GEM, so [0,80.829,0] means GEM 1 and 3 are aligned with eachother but GEM 2 is maximally misaligned, where maximum misalignment in y is sqrt(3)*pitch/6. With the maximum x offset, this puts the second GEM hole in the middle of the equilateral triangle formed by three of the first GEM's holes.
+
+- **cam_bins_x** - Number of x-bins to digitize the camera readout to. 2048 is the standard number for 2x2-binned ORCA quest data (configuration used in the MIGDAL experiment)
+
+- **cam_bins_y** - Number of y-bins to digitize the camera readout to. 1152 is the standard number for 2x2-binned ORCA quest data (configuration used in the MIGDAL experiment)
+
+- **cam_width** - Width (x) of the field of view of the camera readout in cm. In MIGDAL this value is 8cm
+
+- **cam_height** - Height (y) of the field of view of the camera readout in cm. In MIGDAL this value is 4.5cm
 
 3. Under the `Sim_settings` heading:
+
+- **randomize_position** - Set to True to randomize the (x,y) position of primary tracks. Otherwise primary tracks are in the center of the readout (cam_bins_x//2, cam_bins_y//2)
 
 - **digitization_input_file** - Filepath to the `.feather` file of primary tracks to be simulated in the MIGDAL detector. See [the previous section of these documents](https://migdal-simulator.readthedocs.io/en/latest/Simulating%20Primary%20Tracks.html) for instructions of how to generate this.
 
@@ -68,11 +82,15 @@ Currently MIGDAL_simulator only suports GEMs with honeycomb-patterns of holes
 
 - **apply amplification** - If True, apply GEM amplification
 
+- **gpu** - We've built in minimal GPU compatibility. Recommend setting this to False, but if True, `process_primary_tracks.py` will simulate amplification on a CUDA-supported GPU
+
 - **digitize** - If True, bin the GEM-amplified signal and simulate the CMOS camera and ITO strip readout responses to this signal
+
+- **write_ITO** - The ITO simulation is just a crude binning in xz. Given that there is no signal response simulation, we recommend setting this to False.
 
 - **write_gain** - If True, save the coordinates of each individual GEM-amplified ionization point. **Highly recommend setting this to False to save diskspace**
 
-- **overwrite_input** - If True, when `process_primary_tracks.py` is run, the primary track file is overwritten by the output of this script. The primary track information from the output will remain the same if this is marked True, so this setting simply replaces the primary track file with the file containing the primary track information *and* the MIGDAL detector simulation information
+- **overwrite_output** - If True, when `process_primary_tracks.py` is run, the primary track file is overwritten by the output of this script. The primary track information from the output will remain the same if this is marked True, so this setting simply replaces the primary track file with the file containing the primary track information *and* the MIGDAL detector simulation information
 
 - **output_dir** - If the `overwrite_input` setting above is set to False, then this is the directory that the output of `process_primary_tracks.py` will be placed in
 
