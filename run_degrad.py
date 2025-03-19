@@ -250,11 +250,12 @@ if __name__ == '__main__':
         print('Running DEGRAD %s times'%(nchunks))
         start = time.time() #log start time
         for chunk in tqdm(range(0,nchunks)):
+            seed = np.random.randint(1,1e9)
             run_degrad(card_file=card,
                        outdir = outdir,
                        num_events=n_events,
                        energy = E,
-                       random_seed = chunk,
+                       random_seed = seed,
                        rotate = rot,
                        randomize_track_order = random_order,
                        W = W)
