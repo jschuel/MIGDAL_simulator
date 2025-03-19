@@ -132,29 +132,44 @@ class process_tracks:
 
                     
                 # After processing all GEM stages, digitize the camera
-                if self.migdal:
-                    xc, yc, qc, fracc = self.digitize_camera_migdal(track[:, 0], track[:, 1], track[:, 3])
-                    fraccam.append(fracc)
-                else:
-                    xc, yc, qc = self.digitize_camera(track[:, 0], track[:, 1])
+                try:
+                    if self.migdal:
+                        xc, yc, qc, fracc = self.digitize_camera_migdal(track[:, 0], track[:, 1], track[:, 3])
+                        fraccam.append(fracc)
+                    else:
+                        xc, yc, qc = self.digitize_camera(track[:, 0], track[:, 1])
+                except: #In case arrays input into digitization routine are empty
+                    if self.migdal:
+                        fracc = []
+                        fraccam.append(fracc)
+                    else:
+                        xc, yc, qc = [], [], []
+                    
                 xcam.append(xc)
                 ycam.append(yc)
                 qcam.append(qc)
 
-                # Apply extra induction gap diffusion before digitizing ITO
-                track[:, 0] += np.sqrt(induction_gap_length) * sigmaT_induc * 1e-4 * np.random.normal(0, 1, len(track))
-                track[:, 1] += np.sqrt(induction_gap_length) * sigmaT_induc * 1e-4 * np.random.normal(0, 1, len(track))
-                track[:, 2] += np.sqrt(induction_gap_length) * sigmaL_induc * 1e-4 * np.random.normal(0, 1, len(track))
+                try:
+                    # Apply extra induction gap diffusion before digitizing ITO
+                    track[:, 0] += np.sqrt(induction_gap_length) * sigmaT_induc * 1e-4 * np.random.normal(0, 1, len(track))
+                    track[:, 1] += np.sqrt(induction_gap_length) * sigmaT_induc * 1e-4 * np.random.normal(0, 1, len(track))
+                    track[:, 2] += np.sqrt(induction_gap_length) * sigmaL_induc * 1e-4 * np.random.normal(0, 1, len(track))
             
-                # Digitize ITO
-                if self.migdal:
-                    xi, zi, qi, fraci = self.digitize_ITO_migdal(track[:, 0], track[:, 2], track[:, 3])
-                    fracITO.append(fraci)
-                else:
-                    xi, zi, qi = self.digitize_ITO(track[:, 0], track[:, 2])
-                    xITO.append(xi)
-                    zITO.append(zi)
-                    qITO.append(qi)
+                    # Digitize ITO
+                    if self.migdal:
+                        xi, zi, qi, fraci = self.digitize_ITO_migdal(track[:, 0], track[:, 2], track[:, 3])
+                        fracITO.append(fraci)
+                    else:
+                        xi, zi, qi = self.digitize_ITO(track[:, 0], track[:, 2]) 
+                except: #In case of empty tracks
+                    if self.migdal:
+                        fraci = []
+                        fracITO.append(fraci)
+                    else:
+                        xi, zi, qi = [], [], []
+                xITO.append(xi)
+                zITO.append(zi)
+                qITO.append(qi)
                     
                 if self.gpu:
                     torch.cuda.empty_cache()
