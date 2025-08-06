@@ -135,9 +135,11 @@ Uncheck the checked box in the COLLISION PLOTS section in the left banner. Doing
 
 7. Now `C_recoil_dir`, and `F_recoil_dir` should each have `COLLISON.txt` and `EXYZ.txt` output files from TRIM. Verify this is the case.
 
-8. In the RCTRIM directory, run `python3 create_recoils.py`. This will create an NR primary tracks file consisting of `N_recoils` of `recoil_species_generated` that will be written to `output_dir` as specified in the `RCTRIM_settings` heading of `configuration.yaml`. The energy distribution of these recoils should follow the expected recoil energy spectrum induced by elastic scattering of 2.5 MeV DD-induced neutrons.
+8. In the RCTRIM directory, run `python3 conversions.py`. This converts the `COLLISON.txt` and `EXYZ.txt` files into numpy arrays.
 
-9. Re-do step 8 for the other recoil_species if you would like.
+9. In the RCTRIM directory, run `python3 create_recoils.py`. This will create an NR primary tracks file consisting of `N_recoils` of `recoil_species_generated` that will be written to `output_dir` as specified in the `RCTRIM_settings` heading of `configuration.yaml`. The energy distribution of these recoils should follow the expected recoil energy spectrum induced by elastic scattering of 2.5 MeV DD-induced neutrons.
+
+10. Re-do steps 8-9 for the other recoil_species if you would like.
 
 ## Generating Migdal primary tracks
 
