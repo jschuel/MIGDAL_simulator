@@ -1,25 +1,29 @@
 Degrad_settings: #Settings for simulating ERs in degrad
   input_file: input_test.card   #Name of input card file. run_and_process_degrad.py adjusts the parameters below in the card file
-  n_tracks: 1000     #Number of ERs to simulate
+  n_tracks: 1500    #Number of ERs to simulate
   seed: 42 #Random seed. Needs to be different each time DEGRAD is run...this is handled automatically when parallel is set to True.
   parallel: true #Splits the degrad task into # chunks defined below and concatenates the output. ONLY APPLIES TO DEGRAD PRIMARY TRACK SIM
-  parallel_chunks: 100 #only relevant if parallel is set to True. Must be <= n_tracks. n_tracks // parallel_chunks = 500 or 1000 performs well
-  energy: 5900 #In eV. 
-  primary_track_output_dir: primary_tracks/ #Degrad primary track output directory
-
+  parallel_chunks: 20 #only relevant if parallel is set to True. Must be <= n_tracks. n_tracks // parallel_chunks = 500 or 1000 performs well
+  energy: 15000 #In eV. 
+  primary_track_output_dir: primary_tracks_for_stephanie_July2025/ #Degrad primary track output directory
+  MIGDAL_simulator_format: true #If true, save output in mm for MIGDAL simulator
 Gas_props: #Gas properties
   vd: 130 #Drift speed in um/ns
   sigmaT: 264 #Transverse diffusion in um/sqrt(cm)
   sigmaL: 167 #Longitudinal diffusion in um/sqrt(cm)
+  #sigmaT: 80
+  #sigmaL: 50.6
   sigmaT_trans: 590 #Diffusion through transfer gap
   sigmaL_trans: 218 #Long. diffusion thru transfer gap
+  #sigmaT_trans: 179
+  #sigmaL_trans: 66
   sigmaT_induc: 359 #Induction gap trans. diff. Only relevant for ITO digitization
   sigmaL_induc: 158
   W: 34.2 #eV value is for CF4
 
 TPC_sim: #Detector simulation.
   nGEM: 2 #Number of GEMs. Code now supports any number
-  gain: 2000 #Total gain across all GEMs. Computed in simulation as gain**(1/nGEM)
+  gain: 200 #Total gain across all GEMs. Computed in simulation as gain**(1/nGEM)
   GEM_width: 10 #cm
   GEM_height: 10 #cm
   GEM_thickness: 0.057 #cm
@@ -27,15 +31,15 @@ TPC_sim: #Detector simulation.
   hole_pitch: 280 #GEM hole pitch in um
   drift_gap_length: 3 #length of drift gap in cm
   transfer_gap_length: 0.2 #Length of transfer gap in cm
-  extra_GEM_diffusion: 0.01425 #Currently set to GEM thickness / 4. This is extra smearing post avalanche
-  #extra_GEM_diffusion: 0 #Currently set to GEM thickness / 4. This is extra smearing post avalanche
+  #extra_GEM_diffusion: 0.01425 #Currently set to GEM thickness / 4. This is extra smearing post avalanche
+  extra_GEM_diffusion: 0 #Currently set to GEM thickness / 4. This is extra smearing post avalanche
+  force_through_GEM_hole: true #set to true if you want to force charge through a GEM hole
   induction_gap_length: 0.2 #length of induction gap cm
   min_drift_length: 0.5 #cm.  Drift lengths are computed using a random uniform dist. between the min and max drift lengths specified here
   max_drift_length: 2.5 #cm...originally 2.5 increased for longer ERs
-  
   ### GEM offsets are listed as a list. Length of this list should match nGEM. If not entered as a list, offsets for all GEMs will default to being 0
-  GEM_offsetsx: [0,0,0,0] #list of GEM hole offsets in x (in um). List entries be entered as intengers or floats. For 3 GEMs w/ 280um pitch [0,0,0] is max aligned and [0,140,0] is max misaligned, where max misalign in x is pitch/2.
-  GEM_offsetsy: [0,0,0,0] #list of GEM offsets in y. Offsets are relative to the first GEM, so [0,80.829,0] means GEM 1 and 3 are aligned with eachother but GEM 2 is maximally misaligned, where max misalign in y is sqrt(3)*pitch/6. With the x offset, this puts the second GEM hole in the middle of the equilateral triangle formed by three of the first GEM's holes.
+  GEM_offsetsx: [0, 0, 0, 0] #list of GEM hole offsets in x (in um). List entries be entered as intengers or floats. For 3 GEMs w/ 280um pitch [0,0,0] is max aligned and [0,140,0] is max misaligned, where max misalign in x is pitch/2.
+  GEM_offsetsy: [0, 0, 0, 0] #list of GEM offsets in y. Offsets are relative to the first GEM, so [0,80.829,0] means GEM 1 and 3 are aligned with eachother but GEM 2 is maximally misaligned, where max misalign in y is sqrt(3)*pitch/6. With the x offset, this puts the second GEM hole in the middle of the equilateral triangle formed by three of the first GEM's holes.
 
   cam_bins_x: 2048 #2048 is standard for ORCA quest
   cam_bins_y: 1152 # 1152 is standard for ORCA quest
@@ -44,29 +48,31 @@ TPC_sim: #Detector simulation.
 
 Sim_settings:
   randomize_primary_track_order: true #Randomizes order of tracks when generating primary tracks, generally a good idea to set this to True
-  rotate_tracks: true #Only relevant when generating primary tracks. Set to True if you want to rotate the primary tracks so they are isotropic. Otherwise primary tracks are (1,0,0)
-  randomize_position: true #Relevant for digitization: Set to True to randomize the (x,y) position of primary tracks. Otherwise primary tracks are in the center of the readout (1024,576)
+  rotate_tracks: false #Only relevant when generating primary tracks. Set to True if you want to rotate the primary tracks so they are isotropic. Otherwise primary tracks are (1,0,0)
+  randomize_position: false #Relevant for digitization: Set to True to randomize the (x,y) position of primary tracks. Otherwise primary tracks are in the center of the readout (1024,576)
 
   ###Below are intended for process_primary_tracks{_batch}.py
-  digitization_input_file: primary_tracks/5.9keV_1000Events_all.feather #set the input file for process_primary_tracks.py 
+  digitization_input_file: wesley_primary_tracks/C_maxE400.0_500primaryTracks.feather
+  #digitization_input_file: primary_tracks/5.9keV_1000Events_all.feather #set the input file for process_primary_tracks.py 
   apply_drift: true #If True drift tracks
   apply_amplification: true #If true, simulate GEMs and amplify
-  gpu: False #If true, try to process on gpu. If False, don't. Keep false if you're running on a machine without a discrete GPU.
+  gpu: false #If true, try to process on gpu. If False, don't. Keep false if you're running on a machine without a discrete GPU.
   digitize: true #If true, simulate readout
   write_ITO: false #ITO simulation is crude so in general recommend setting to false
   write_gain: false #If True, write out amplified charges (TAKES LOTS OF DISK SPACE)
   overwrite_output: false #If True, when processing a primary tracks file, it writes out the processed information to the same file. Otherwise it will write a separate file
-  output_dir: processed/ #Directory for MIGDAL processed output file. ONLY RELEVANT IF overwrite_output IS FALSE
+  output_dir: /home/jeff/workspace/MIGDAL_simulator/diffusion_test/ #Directory for MIGDAL processed output file. ONLY RELEVANT IF overwrite_output IS FALSE
 
+  parallel_chunks: 100
 RCTRIM_settings: #RCTRIM requires a basedir that contains the subdirs 'C' and 'F' and nothing else
   SRIM_output_dir: /home/jeff/srim/SRIM Outputs/ #YOURS WILL BE DIFFERENT: This is the directory where your raw SRIM output is written to
-  recoil_species_generated: H #needs to be C or F...or maybe H if H works MAKE SURE TO SPECIFY THIS FOR EACH CAMPAIGN!
-  base_dir: NRs_campaign2/ #Make sure you use a new base_dir if you don't want to overwrite SRIM output files
-  C_recoil_dir: NRs_campaign2/C #Always needs to be <base_dir_name>/C
-  F_recoil_dir: NRs_campaign2/F #Same as above
-  H_recoil_dir: NRs_campaign2/H
+  recoil_species_generated: C #needs to be C or F...or maybe H if H works MAKE SURE TO SPECIFY THIS FOR EACH CAMPAIGN!
+  base_dir: for_wesley/ #Make sure you use a new base_dir if you don't want to overwrite SRIM output files
+  C_recoil_dir: for_wesley/C #Always needs to be <base_dir_name>/C
+  F_recoil_dir: for_wesley/F #Same as above
+  H_recoil_dir: for_wesley/H
   proton_energy: 400 #keV
-  N_recoils: 500 #Number of primary tracks to generate. THIS CAN BE LARGER THAN THE NUMBER OF EVENTS YOU SIMULATED IN SRIM/TRIM
+  N_recoils: 1000 #Number of primary tracks to generate. THIS CAN BE LARGER THAN THE NUMBER OF EVENTS YOU SIMULATED IN SRIM/TRIM
   output_dir: data/ #outputh directory for generated primary tracks
 
 Migdal_sim: #Settings for combining ER and NR tracks for forming Migdals
