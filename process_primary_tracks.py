@@ -11,8 +11,9 @@ class process_tracks:
     def __init__(self,infile,outpath,nGEM,drift,min_drift_length,max_drift_length,v_drift,sigmaT,
                  sigmaL, sigmaT_trans,sigmaL_trans, sigmaT_induc,sigmaL_induc, drift_gap_length,
                  GEM_width, GEM_height, GEM_thickness, hole_diameter, hole_pitch, extra_GEM_diffusion, amplify,gain,
-                 transfer_gap_length, induction_gap_length, GEM_offsetsx, GEM_offsetsy,
-                 randomize_position, write_ITO, cam_bins_x=2048, cam_bins_y=1152, cam_width=8, cam_height=4.5, write_gain = False, overwrite = False, use_gpu = False):
+                 transfer_gap_length, induction_gap_length, GEM_offsetsx, GEM_offsetsy,force_through_hole,
+                 randomize_position, write_ITO, sigmaTe = None, sigmaLe = None,cam_bins_x=2048,
+                 cam_bins_y=1152, cam_width=8, cam_height=4.5, write_gain = False, overwrite = False, use_gpu = False):
 
         self.gpu = use_gpu
         self.nGEM = int(nGEM)
@@ -37,10 +38,13 @@ class process_tracks:
         self.GEM_offsetsx = GEM_offsetsx
         self.GEM_offsetsy = GEM_offsetsy
         self.extra_GEM_diffusion = extra_GEM_diffusion
+        self.force_through_hole = force_through_hole
+        self.sigmaTe = sigmaTe
+        self.sigmaLe = sigmaLe
         
         print(infile)
 
-        self.data = pd.read_feather(infile)
+        self.data = pd.read_feather(infile)[:1]
         if 'ID' in self.data.columns: #autocheck if the event is a Migdal
             self.migdal = True
         else:
@@ -123,15 +127,16 @@ class process_tracks:
                 #loop and apply amplification through each GEM
                 for i in range(self.nGEM):
                     # Filter the charges that fall within the GEM holes for this stage.
-                    track = np.array([charge for charge in track if self.is_within_GEMhole(charge[0], charge[1], self.hole_trees[i])])
+                    if not self.force_through_hole:
+                        track = np.array([charge for charge in track if self.is_within_GEMhole(charge[0], charge[1], self.hole_trees[i])])
+                    else:
+                        track = self.snap_to_nearest_holes(track, self.hole_trees[i], self.hole_positions[i], keep_radius_gate=False)
                     if len(track) == 0:
                         # If no charge makes it through, exit the loop.
                         break
                     gap_length = transfer_gap_length + self.extra_GEM_diffusion if i != self.nGEM-1 else self.extra_GEM_diffusion
                     track = self.apply_amplification(track,gap_length)
-
                     
-                # After processing all GEM stages, digitize the camera
                 try:
                     if self.migdal:
                         xc, yc, qc, fracc = self.digitize_camera_migdal(track[:, 0], track[:, 1], track[:, 3])
@@ -195,7 +200,7 @@ class process_tracks:
         else:
             if not os.path.exists(outpath):
                 os.makedirs(outpath)
-            outname = os.path.split(os.path.splitext(infile)[0])[1]+'_%sGEMs_%sgain_digitized.feather'%(self.nGEM,gain)
+            outname = os.path.split(os.path.splitext(infile)[0])[1]+'_%sGEMs_%sgain_%ssigmaT_%ssigmaTransder_digitized.feather'%(self.nGEM,gain,self.sigmaT,sigmaT_trans)
             self.data.to_feather(os.path.join(outpath,outname))
 
     #Method to apply GEM amplification
@@ -306,11 +311,30 @@ class process_tracks:
         distance, index = tree.query([x, y])
         return distance <= self.hole_radius_cm
 
-    def generate_gain_points(self, x, x_post, gain_electrons, gap_length, diff_coeff): #Generates x, y, and z coordiantes after gain
+    def snap_to_nearest_holes(self, track, tree, hole_positions, keep_radius_gate=False):
+        xy = track[:, :2]                                # (N, 2)
+        dist, idx = tree.query(xy)                  # vectorized
+        if keep_radius_gate:
+            # Optional: preserve original acceptance by gating on hole radius
+            mask = dist <= self.hole_radius_cm
+            track = track[mask]
+            idx   = idx[mask]
+            return track
+        # Move (x,y) to hole centers
+        #print(idx)
+        #print(np.array(hole_positions)[idx])
+        track[:, :2] = np.array(hole_positions)[idx]
+        return track
+
+    def generate_gain_points(self, x, x_post, gain_electrons, gap_length, diff_coeff, extra_sigma): #Generates x, y, and z coordiantes after gain
         for enum, val in np.ndenumerate(gain_electrons):
             start_ind = np.sum(gain_electrons[:enum[0]])
             end_ind = np.sum(gain_electrons[:enum[0]+1])
-            x_post[start_ind:end_ind] = x[enum] + np.sqrt(gap_length)*diff_coeff*1E-4*np.random.normal(0,1,val)
+            if extra_sigma is not None:
+                extra = extra_sigma*1E-4*np.random.normal(0,1,val)
+            else:
+                extra = 0
+            x_post[start_ind:end_ind] = x[enum] + np.sqrt(gap_length)*diff_coeff*1E-4*np.random.normal(0,1,val)+extra
 
     def generate_gain_points_GPU(self, x, gain_electrons, gap_length, diff_coeff):
         gain_electrons = gain_electrons.to('cuda')
@@ -332,9 +356,9 @@ class process_tracks:
             y_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
             z_post = np.ascontiguousarray(np.zeros(np.sum(gain_electrons)),dtype=np.float32)
 
-            self.generate_gain_points(x, x_post, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_trans)
-            self.generate_gain_points(y, y_post, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_trans)
-            self.generate_gain_points(z, z_post, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_long)
+            self.generate_gain_points(x, x_post, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_trans,extra_sigma = self.sigmaTe)
+            self.generate_gain_points(y, y_post, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_trans, extra_sigma = self.sigmaTe)
+            self.generate_gain_points(z, z_post, gain_electrons, gap_length = gap_length, diff_coeff = diff_coeff_long, extra_sigma = self.sigmaLe)
 
             return x_post, y_post, z_post
 
@@ -423,6 +447,11 @@ if __name__ == '__main__':
     GEM_offsetsx = tpc_cfg['GEM_offsetsx']
     GEM_offsetsy = tpc_cfg['GEM_offsetsy']
     extra_GEM_diffusion = tpc_cfg['extra_GEM_diffusion']
+    force_through_hole = tpc_cfg['force_through_GEM_hole']
+
+    ###Hard coded readout resolution###
+    sigmaTe = np.sqrt((hole_pitch/np.sqrt(12))**2)
+    
 
     cam_bins_x = tpc_cfg['cam_bins_x']
     cam_bins_y = tpc_cfg['cam_bins_y']
@@ -454,6 +483,7 @@ if __name__ == '__main__':
                    sigmaL_trans = sigmaL_trans,
                    sigmaT_induc = sigmaT_induc,
                    sigmaL_induc = sigmaL_induc,
+                   sigmaTe = sigmaTe,
                    drift_gap_length = drift_gap_length,
                    GEM_width=GEM_width,
                    GEM_height=GEM_height,
@@ -465,6 +495,7 @@ if __name__ == '__main__':
                    GEM_offsetsx = GEM_offsetsx,
                    GEM_offsetsy = GEM_offsetsy,
                    extra_GEM_diffusion = extra_GEM_diffusion,
+                   force_through_hole = force_through_hole,
                    cam_bins_x = cam_bins_x,
                    cam_bins_y = cam_bins_y,
                    cam_width = cam_width,
